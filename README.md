@@ -132,7 +132,7 @@ Every response carries an `X-Request-Id`; `docker compose logs api` shows one li
 | `GET` | `/accounts/{accountID}/usage` | Limit, reserved space and available space | Yes |
 | `POST` | `/accounts/{accountID}/reservations` | Reserve space, with an `Idempotency-Key` | Yes; a retry with the same key is replayed |
 | `GET` | `/accounts/{accountID}/reservations/{reservationID}` | Read a reservation | Yes |
-| `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation | Yes; a second release with T10 |
+| `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation | Yes; repeating it returns the same body and gives the space back once |
 | `GET` | `/healthz` | Liveness | Yes |
 | `GET` | `/readyz` | Readiness: the database answers; `limits` tells whether `MAX_PARALLEL_CHUNKS` is known | Yes |
 
@@ -164,9 +164,9 @@ The reasons, the invariants and the failure handling are in [docs/decisions.md](
 
 Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2).
 
-- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots (T06); concurrent reservations serialized by `BEGIN IMMEDIATE`, so they never exceed the limit or the slots (T07); a retry with the same key replayed instead of reserved twice (T08); a known key reused with another size refused with `422` (T14); reading and releasing a reservation (T09); invalid keys and sizes refused with a precise detail (T13); the limit source retried with a backoff while the limit is unknown (T18, part 1).
+- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots (T06); concurrent reservations serialized by `BEGIN IMMEDIATE`, so they never exceed the limit or the slots (T07); a retry with the same key replayed instead of reserved twice (T08); a known key reused with another size refused with `422` (T14); reading and releasing a reservation (T09); a repeated or concurrent release giving the space back once (T10); invalid keys and sizes refused with a precise detail (T13); the limit source retried with a backoff while the limit is unknown (T18, part 1).
 - **In progress:** this README and the demo (T12).
-- **Not started:** double release and restart (T10, T11), the other edge cases (T15 to T17, T19 to T21, and the end-to-end part of T18), container tests (T22), OpenAPI (T23).
+- **Not started:** restart and shutdown proofs (T11), the other edge cases (T15 to T17, T19 to T21, and the end-to-end part of T18), container tests (T22), OpenAPI (T23).
 
 Time spent so far: T01 35 min, T02 30 min, T03 30 min, then T04 to T09, T13 and part of T18 built in parallel by agents in about 1 h of wall-clock time, after the design and tooling work (docs, tickets, rules, GitHub setup).
 
