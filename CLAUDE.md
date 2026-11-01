@@ -21,7 +21,7 @@ Take-home exercise for Hivenet: a Go service that reserves storage space for upl
 
 ## Workflow
 
-| Step | Command | Issue label afterwards |
+| Step | Command | Ticket state afterwards |
 |---|---|---|
 | Plan, branch linked to the issue, TDD with a stop after every step | `/implement-task T06` | `status: in progress` |
 | Checks, conventional commit, push | `/push-code` | unchanged |
@@ -30,7 +30,15 @@ Take-home exercise for Hivenet: a Go service that reserves storage space for upl
 
 - Branch names follow Conventional Branch (`feat/t06-reserve`, listed in `tasks/README.md`); commit messages follow Conventional Commits (skill `conventional-commit`).
 - Never commit on `main`. Commit and push only through `/push-code`.
-- GitHub operations (issues, labels, pull requests) go through the GitHub MCP server defined in `.mcp.json`: official image, OAuth login with the token kept in memory, toolsets limited to `context,repos,issues,labels,pull_requests`. `gh` is the fallback.
+- GitHub operations (issues, labels, pull requests, project) go through the GitHub MCP server defined in `.mcp.json`: official image, OAuth login with the token kept in memory, toolsets limited to `context,repos,issues,labels,pull_requests,projects`. `gh` is the fallback.
+
+## Ticket state
+
+A ticket's state lives in two places, always changed together:
+- the `status:` label of its issue (`status: to do`, `status: in progress`, `status: validation`, `status: validated`, `status: refused`), which the skills read;
+- the Status column of its card in the GitHub Project [reserve-file](https://github.com/users/guillaumebarbas/projects/2) (`To do`, `In progress`, `Validation`, `Validated`, `Refused`), which shows the board.
+
+"Set the ticket state to X" in a skill means: replace the issue's `status:` label, then set the card's Status to the matching column. If the two disagree, the label wins and the card is fixed.
 - Skill `go-best-practices`: Go practices and review checklist, used when planning, refactoring and reviewing.
 
 ## Commands

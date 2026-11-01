@@ -4,14 +4,14 @@
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
-        "-p", "127.0.0.1:8085:8085",
+        "-p", "127.0.0.1:18085:18085",
         "-e", "GITHUB_OAUTH_CALLBACK_PORT",
         "-e", "GITHUB_TOOLSETS",
         "ghcr.io/github/github-mcp-server:v2.0.3"
       ],
       "env": {
-        "GITHUB_OAUTH_CALLBACK_PORT": "8085",
-        "GITHUB_TOOLSETS": "context,repos,issues,labels,pull_requests"
+        "GITHUB_OAUTH_CALLBACK_PORT": "18085",
+        "GITHUB_TOOLSETS": "context,repos,issues,labels,pull_requests,projects"
       }
     }
   }

@@ -42,8 +42,8 @@ Do not modify code during the review.
 ## 4. Decision
 
 Ask the user for the decision, then:
-- **Validate**: squash-merge the pull request, then delete its branch (`git push origin --delete <branch>`). The issue closes through `Closes #<issue>`; replace its `status:` label with `status: validated`. Finally `git switch main` and `git pull --ff-only`.
-- **Changes requested**: replace the issue's `status:` label with `status: refused`. Post the problems as a comment on the pull request only if the user agrees. The next `/implement-task` on this ticket resumes on the same branch.
-- **Abandon**: close the pull request, close the issue as not planned, and label it `status: refused`.
+- **Validate**: squash-merge the pull request, then delete its branch (`git push origin --delete <branch>`). The issue closes through `Closes #<issue>`; set the ticket state to `validated` (see Ticket state in `CLAUDE.md`). Finally `git switch main` and `git pull --ff-only`.
+- **Changes requested**: set the ticket state to `refused`. Post the problems as a comment on the pull request only if the user agrees. The next `/implement-task` on this ticket resumes on the same branch.
+- **Abandon**: close the pull request, close the issue as not planned, and set the ticket state to `refused`.
 
 GitHub does not let authors approve their own pull requests: validating means merging.
