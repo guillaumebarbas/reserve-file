@@ -18,8 +18,8 @@ One ticket per step: the foundations, each feature, and each edge case or small 
 | [T04](T04-external-limit.md) | External limit: fetch, cache and refresh | Foundation | P0 | 25 min | T02, T03 | [#4](https://github.com/guillaumebarbas/reserve-file/issues/4) | `feat/t04-external-limit` | 20 min |
 | [T05](T05-usage.md) | Account usage | Feature | P0 | 15 min | T04 | [#5](https://github.com/guillaumebarbas/reserve-file/issues/5) | `feat/t05-usage` | 20 min |
 | [T06](T06-reserve.md) | Reserve storage | Feature | P0 | 30 min | T05 | [#6](https://github.com/guillaumebarbas/reserve-file/issues/6) | `feat/t06-reserve` | 30 min |
-| [T07](T07-concurrent-reservations.md) | Concurrent reservations never exceed the limits | Case | P0 | 20 min | T06 | [#7](https://github.com/guillaumebarbas/reserve-file/issues/7) | `feat/t07-concurrent-reservations` | |
-| [T08](T08-retry-after-lost-response.md) | Retry after a lost response | Case | P0 | 20 min | T06 | [#8](https://github.com/guillaumebarbas/reserve-file/issues/8) | `feat/t08-retry-after-lost-response` | |
+| [T07](T07-concurrent-reservations.md) | Concurrent reservations never exceed the limits | Case | P0 | 20 min | T06 | [#7](https://github.com/guillaumebarbas/reserve-file/issues/7) | `feat/t07-concurrent-reservations` | 7 min |
+| [T08](T08-retry-after-lost-response.md) | Retry after a lost response | Case | P0 | 20 min | T06 | [#8](https://github.com/guillaumebarbas/reserve-file/issues/8) | `feat/t08-retry-after-lost-response` | 20 min |
 | [T09](T09-release.md) | Release and read a reservation | Feature | P0 | 20 min | T06 | [#9](https://github.com/guillaumebarbas/reserve-file/issues/9) | `feat/t09-release` | |
 | [T10](T10-double-release.md) | Double and concurrent release | Case | P0 | 15 min | T09 | [#10](https://github.com/guillaumebarbas/reserve-file/issues/10) | `feat/t10-double-release` | |
 | [T11](T11-restart-and-shutdown.md) | Restart and graceful shutdown | Case | P0 | 15 min | T09 | [#11](https://github.com/guillaumebarbas/reserve-file/issues/11) | `feat/t11-restart-and-shutdown` | |
