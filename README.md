@@ -4,20 +4,63 @@ A Go service that reserves storage space for uploads: a client reserves bytes be
 
 **Status: complete.** Every ticket of the plan is done, from the core API to the edge cases, container tests and an OpenAPI description. What a production release would still need is listed under [Gaps](#gaps-that-would-block-a-production-release).
 
-## Run it
+## How to start
 
-You need Docker with Compose. No Go toolchain and no database to install.
+You need Docker with Compose: no Go toolchain and no database to install. The commands are for a POSIX shell (macOS, Linux, Git Bash or WSL); in Windows PowerShell, type `curl.exe` instead of `curl`.
+
+1. Get the code:
+
+   ```sh
+   git clone https://github.com/guillaumebarbas/reserve-file.git
+   cd reserve-file
+   ```
+
+2. Build and start the service, and wait until it is healthy:
+
+   ```sh
+   docker compose up -d --build --wait
+   ```
+
+   The API listens on `http://localhost:8080`. The database needs no setup: on its first start, the service creates the SQLite schema and the accounts `large_account` (10 GiB) and `small_account` (100 MiB), and fetches `MAX_PARALLEL_CHUNKS` from `https://env.hivenet.com/dev`.
+
+3. Check that it answers:
+
+   ```sh
+   curl http://localhost:8080/readyz
+   curl http://localhost:8080/accounts/small_account/usage
+   ```
+
+   ```json
+   {"database":"ok","limits":"ok"}
+   {"account_id":"small_account","limit_bytes":104857600,"reserved_bytes":0,"available_bytes":104857600,"active_reservations":0,"max_active_reservations":5}
+   ```
+
+4. Run the [demo](#demo). It reserves, retries, overflows and releases on `small_account`, prints the expected and the actual answer of each step, and ends with `Demo passed: every step got the expected answer.`
+
+   ```sh
+   docker compose run --rm demo
+   ```
+
+5. Optional: browse the API in Swagger UI and send calls from it. Add this line to a `.env` file next to `compose.yaml`, so that the API accepts calls from the page:
+
+   ```sh
+   CORS_ALLOWED_ORIGIN=http://localhost:8081
+   ```
+
+   Then start the stack with the `docs` profile and open http://localhost:8081:
+
+   ```sh
+   docker compose --profile docs up -d --build --wait
+   ```
+
+6. Stop everything with `docker compose --profile docs down`. The data stays on its volume for the next start; `docker compose --profile docs down -v` deletes it.
+
+**Other ports.** If port 8080 or 8081 is taken, or reserved as Windows does for Hyper-V and WSL, choose free ports in `.env`, use them in the URLs, and in Swagger UI type the API port in the `port` field under **Servers**:
 
 ```sh
-docker compose up --build
-```
-
-The API listens on `http://localhost:8080`. `docker compose ps` shows the container as `healthy` once `/healthz` answers.
-
-If port 8080 is taken, or reserved as Windows does for Hyper-V and WSL, pick another host port in a local `.env` file:
-
-```sh
-echo API_PORT=18080 > .env
+API_PORT=18080
+DOCS_PORT=18081
+CORS_ALLOWED_ORIGIN=http://localhost:18081
 ```
 
 The examples below use port 8080; with `API_PORT` set, use that port instead.
@@ -143,13 +186,7 @@ The contract, the error catalogue and the retry rules are in [docs/api.md](docs/
 
 ### API description
 
-[api/openapi.yaml](api/openapi.yaml) describes every endpoint, header, body and error code in OpenAPI 3.1. To browse it and send calls from the page, start the stack with the `docs` profile and allow Swagger UI's origin:
-
-```sh
-CORS_ALLOWED_ORIGIN=http://localhost:8081 docker compose --profile docs up --build
-```
-
-Swagger UI is then at http://localhost:8081: "Try it out" sends the calls to the API on port 8080. If you changed the ports, set `DOCS_PORT` and `API_PORT` in `.env`, use `http://localhost:<DOCS_PORT>` as the allowed origin, and pick `<API_PORT>` in the server list of the page. `docker compose run --rm openapi-lint` checks the file with Redocly.
+[api/openapi.yaml](api/openapi.yaml) describes every endpoint, header, body and error code in OpenAPI 3.1. Swagger UI displays it at http://localhost:8081 once the stack runs with the `docs` profile and `CORS_ALLOWED_ORIGIN` set ([How to start](#how-to-start), step 5). "Try it out" sends real calls to the API, which change its database like any other client. With other ports, type the API port in the `port` field under **Servers**. `docker compose run --rm openapi-lint` checks the file with Redocly.
 
 ## Verify
 
@@ -170,7 +207,7 @@ docker compose up -d --build
 docker compose run --rm demo
 ```
 
-Keep `--build`: without it, Compose reuses an image built earlier from older code, and the demo fails on the endpoints that image lacks.
+Keep `--build`: without it, Compose reuses an image built earlier from older code, and the demo fails on the endpoints that image lacks. The demo also needs nothing reserved on `small_account`: after trying the API by hand or from Swagger UI, release your reservations, or start again from an empty database with `docker compose down -v`.
 
 It uses `small_account` (100 MiB) and prints, for each step, the expected and the actual answer:
 1. usage before anything: nothing reserved;
