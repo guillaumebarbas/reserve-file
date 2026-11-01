@@ -18,7 +18,7 @@ func (store *Store) Reserve(ctx context.Context, candidate domain.Reservation, m
 	if err != nil {
 		return err
 	}
-	if err := account.Reserve(candidate, maxActive); err != nil {
+	if _, _, err := account.Reserve(candidate, nil, maxActive); err != nil {
 		return err
 	}
 	if err := insertReservation(ctx, transaction, candidate); err != nil {
