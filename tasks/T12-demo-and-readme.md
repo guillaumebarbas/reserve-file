@@ -41,8 +41,8 @@ The user is the reviewer, with only Docker.
 
 ## Tests
 
-- [ ] `scripts/demo.sh` exits with 0 on a fresh stack.
-- [ ] `scripts/demo.sh` exits with 0 when run a second time.
+- [x] `scripts/demo.sh` exits with 0 on a fresh stack.
+- [x] `scripts/demo.sh` exits with 0 when run a second time.
 - [ ] The README commands are checked by hand on a fresh clone.
 
 ## Test results
@@ -70,3 +70,4 @@ The user is the reviewer, with only Docker.
   - a temporary copy without step 6 shows the first release at `200` and stops at the second release, which answers `500` until T10;
   - a temporary copy without the steps that need T10 and T14 passes to the end: the remaining reservations are released and usage is back to zero.
 - Remaining: rerun the whole demo twice once T10 and T14 are merged, the README pass once T04 to T11 are done, every README command on a fresh clone, and the publication at submission.
+- After T10 and T14 were merged, the integrator ran the whole demo twice in a row on a fresh stack built from `main` merged into this branch: both runs pass all nine steps and exit with 0. Step 5 gives exactly 3 `201` and 17 `409`, step 6 gives `422 idempotency_key_reused`, and step 7 answers `200` twice with the same `released_at` while the space comes back once.
