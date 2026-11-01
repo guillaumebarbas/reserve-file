@@ -4,6 +4,9 @@ services:
     ports:
       # Windows can reserve port ranges (Hyper-V, WSL): set API_PORT in a local .env to use another host port.
       - "${API_PORT:-8080}:8080"
+    environment:
+      # Empty unless set in the shell or in .env: the service then seeds its default accounts.
+      SEED_ACCOUNTS: ${SEED_ACCOUNTS:-}
     volumes:
       - data:/data
     healthcheck:
