@@ -23,7 +23,9 @@ func (store *Store) Release(ctx context.Context, accountID, reservationID string
 	if err != nil {
 		return domain.Reservation{}, err
 	}
-	account.Release(&reservation, releasedAt)
+	if !account.Release(&reservation, releasedAt) {
+		return reservation, nil
+	}
 	if err := saveReleasedReservation(ctx, transaction, reservation); err != nil {
 		return domain.Reservation{}, err
 	}
