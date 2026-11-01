@@ -8,7 +8,7 @@ import (
 
 type AccountRepository interface {
 	Account(ctx context.Context, accountID string) (domain.Account, error)
-	Reserve(ctx context.Context, candidate domain.Reservation, maxActive domain.MaxActive) error
+	Reserve(ctx context.Context, candidate domain.Reservation, maxActive domain.MaxActive) (domain.Reservation, domain.Outcome, error)
 }
 
 type LimitProvider interface {

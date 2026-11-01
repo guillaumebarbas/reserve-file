@@ -22,10 +22,10 @@ func (repository *fakeAccountRepository) Account(ctx context.Context, accountID 
 	return account, nil
 }
 
-func (repository *fakeAccountRepository) Reserve(ctx context.Context, candidate domain.Reservation, maxActive domain.MaxActive) error {
+func (repository *fakeAccountRepository) Reserve(ctx context.Context, candidate domain.Reservation, maxActive domain.MaxActive) (domain.Reservation, domain.Outcome, error) {
 	repository.reservedCandidate = candidate
 	repository.reservedMaxActive = maxActive
-	return repository.reserveErr
+	return candidate, domain.Created, repository.reserveErr
 }
 
 type fakeLimitProvider struct {

@@ -27,7 +27,7 @@ func (handlers *apiHandlers) reserve(writer http.ResponseWriter, request *http.R
 		handlers.writeError(writer, request, err)
 		return
 	}
-	reservation, err := handlers.storage.Reserve(request.Context(), request.PathValue("accountID"), idempotencyKey, bytes)
+	reservation, _, err := handlers.storage.Reserve(request.Context(), request.PathValue("accountID"), idempotencyKey, bytes)
 	if err != nil {
 		handlers.writeError(writer, request, err)
 		return
