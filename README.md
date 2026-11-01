@@ -123,6 +123,8 @@ docker compose run --rm test
 
 It runs `go vet`, then the unit and integration tests with the race detector, and fails below 100% statement coverage of `internal/`. Each database test uses its own SQLite file. What each kind of test covers, and how failures are simulated: [docs/testing.md](docs/testing.md).
 
+Concurrent reservations are proved by tests that start 20 to 50 reservations at the same instant, through the repository and through the HTTP API: only those that fit succeed, and the counters always equal the active reservations (`TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestAPI_ConcurrentReservations`).
+
 A demo script that shows a reservation, a retry, concurrent requests and a release against the running stack comes with [T12](tasks/T12-demo-and-readme.md).
 
 ## Design
@@ -139,9 +141,9 @@ The reasons, the invariants and the failure handling are in [docs/decisions.md](
 
 Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2).
 
-- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots, one request at a time (T06).
+- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots (T06); concurrent reservations serialized by `BEGIN IMMEDIATE`, so they never exceed the limit or the slots (T07).
 - **In progress:** this README and the demo (T12).
-- **Not started:** concurrency, retries, release and restart (T07 to T11), the other edge cases (T13 to T21), container tests (T22), OpenAPI (T23).
+- **Not started:** retries, release and restart (T08 to T11), the other edge cases (T13 to T21), container tests (T22), OpenAPI (T23).
 
 Time spent so far: T01 35 min, T02 30 min, T03 30 min, then T04 and T05 in parallel in about 20 min, after the design and tooling work (docs, tickets, rules, GitHub setup).
 

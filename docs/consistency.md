@@ -81,10 +81,10 @@ CREATE TABLE settings (
 | `foreign_keys` | `ON` | Off by default in SQLite |
 
 ```
-file:/data/reserve.db?_txlock=immediate&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)
+/data/reserve.db?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=foreign_keys(1)
 ```
 
-With `modernc.org/sqlite`, `_pragma` values are applied to every connection the pool opens.
+With `modernc.org/sqlite`, `_pragma` values are applied to every connection the pool opens. `_txlock` is a driver option, not a pragma: every `BeginTx` then sends `BEGIN IMMEDIATE`, while a read-only transaction still sends a plain `BEGIN`.
 
 ## Reserve transaction
 
@@ -137,7 +137,9 @@ The space comes back only on a real `active → released` transition, so a secon
 
 Concurrent requests with different keys are not refused for being concurrent: parallel chunks and multiple devices are the normal case. They are processed one after the other, each against the real state.
 
-**Proved by.** `TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestReserveRelease_ConcurrentMix`.
+Measured before `_txlock=immediate` (T07): in WAL mode the limit was never exceeded, because a transaction that read an older snapshot cannot write. But 7 to 19 of 50 concurrent requests failed to upgrade their read lock to a write lock, with `SQLITE_BUSY`, and got `503` instead of their real answer: `busy_timeout` cannot help a transaction whose snapshot is stale. With `BEGIN IMMEDIATE`, each request waits for the lock, then reads the state left by the previous one.
+
+**Proved by.** `TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestAPI_ConcurrentReservations`, `TestReserveRelease_ConcurrentMix`.
 
 ### P2 — The response is lost and the client retries
 
