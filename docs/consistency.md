@@ -112,7 +112,7 @@ In one `BEGIN IMMEDIATE` transaction:
 
 1. Load the account, as reserve does. Unknown: `404 account_not_found`.
 2. Load the reservation by `id` and `account_id`. Not found, or owned by another account: `404 reservation_not_found`.
-3. Call `account.Release(&reservation, now)`. For an active reservation, it marks it released and gives its `bytes` and its slot back. For a released one, it changes nothing and returns `false`: the call ends with `200` and the unchanged reservation (T10).
+3. Call `account.Release(&reservation, now)`. For an active reservation, it marks it released and gives its `bytes` and its slot back. For a released one, it changes nothing and returns `false`: the transaction ends without writing, and the call answers `200` with the unchanged reservation, `released_at` included.
 4. When it changed something, save it:
 
 ```sql
@@ -184,7 +184,9 @@ The guard is a convenience. The `UNIQUE (account_id, idempotency_key)` constrain
 
 An unknown reservation, or one owned by another account, gets `404` rather than `403`, so the service does not reveal that it exists.
 
-**Proved by.** `TestAccount_ReleaseTwice`, `TestRelease_SecondReleaseGivesNothingBack`, `TestRelease_Twice`, `TestRelease_ConcurrentReleasesCreditOnce`, `TestRelease_OtherAccountIsNotFound`, `TestAPI_ReleaseIdempotent`.
+With `BEGIN IMMEDIATE`, the reservation is read under the write lock, so the second guard can only refuse a row that something else changed in between; `TestRelease_RollsBackWhenTheRowIsNotUpdated` simulates that with a trigger, and the whole release rolls back.
+
+**Proved by.** `TestAccount_ReleaseTwice`, `TestRelease_Twice`, `TestRelease_ConcurrentReleasesCreditOnce`, `TestReserveRelease_ConcurrentMix`, `TestRelease_RollsBackWhenTheRowIsNotUpdated`, `TestRelease_OtherAccountIsNotFound`, `TestAPI_ReleaseIdempotent`.
 
 ### P7 — A limit drops below current usage
 
