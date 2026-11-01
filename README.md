@@ -78,12 +78,36 @@ curl -s http://localhost:8080/accounts/large_account/usage
 
 `max_active_reservations` is the current `MAX_PARALLEL_CHUNKS`, or `null` while it has never been obtained. An unknown account gives `404 account_not_found`.
 
+Reserve 30 MiB on `small_account` (100 MiB). The `Idempotency-Key` header is required: generate one per logical request and send it again on every retry.
+
+```sh
+curl -i -X POST http://localhost:8080/accounts/small_account/reservations \
+  -H 'Idempotency-Key: 9b2f4c1e-5a43-4f7e-9d0a-2f7c1b8e4d21' \
+  -d '{"bytes": 31457280}'
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+Location: /accounts/small_account/reservations/01a1988c-8e0a-77f2-8afe-1c0d35876fe2
+
+{"id":"01a1988c-8e0a-77f2-8afe-1c0d35876fe2","account_id":"small_account","bytes":31457280,"status":"active","created_at":"2026-11-01T19:18:30.666Z","released_at":null}
+```
+
+A request that does not fit is refused with its numbers, and nothing is reserved:
+
+```json
+{"type":"https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#insufficient_storage","title":"Insufficient storage","status":409,"code":"insufficient_storage","detail":"Requested 80.00 MiB but only 70.00 MiB is available (limit 100.00 MiB). Release a reservation or request less space.","requested_bytes":83886080,"available_bytes":73400320,"limit_bytes":104857600,"request_id":"4fd5a3fcc5666c6f"}
+```
+
+Retrying with the same key returns `503` until the replay lands with T08.
+
 Every response carries an `X-Request-Id`; `docker compose logs api` shows one line per request with the same ID. Errors are `application/problem+json` with a stable `code`.
 
 | Method | Path | Purpose | Available |
 |---|---|---|---|
 | `GET` | `/accounts/{accountID}/usage` | Limit, reserved space and available space | Yes |
-| `POST` | `/accounts/{accountID}/reservations` | Reserve space, with an `Idempotency-Key` | With T06 |
+| `POST` | `/accounts/{accountID}/reservations` | Reserve space, with an `Idempotency-Key` | Yes; retries with T08 |
 | `GET` | `/accounts/{accountID}/reservations/{reservationID}` | Read a reservation | With T09 |
 | `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation | With T09 |
 | `GET` | `/healthz` | Liveness | Yes |
@@ -115,9 +139,9 @@ The reasons, the invariants and the failure handling are in [docs/decisions.md](
 
 Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2).
 
-- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05).
+- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots, one request at a time (T06).
 - **In progress:** this README and the demo (T12).
-- **Not started:** reserve, release, retries and concurrency (T06 to T11), the other edge cases (T13 to T21), container tests (T22), OpenAPI (T23).
+- **Not started:** concurrency, retries, release and restart (T07 to T11), the other edge cases (T13 to T21), container tests (T22), OpenAPI (T23).
 
 Time spent so far: T01 35 min, T02 30 min, T03 30 min, then T04 and T05 in parallel in about 20 min, after the design and tooling work (docs, tickets, rules, GitHub setup).
 

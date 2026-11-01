@@ -11,6 +11,7 @@ var (
 	ErrRequestInProgress   = errors.New("request in progress")
 	ErrLimitUnavailable    = errors.New("limit unavailable")
 	ErrServiceUnavailable  = errors.New("service unavailable")
+	ErrBytesNotPositive    = errors.New("a reservation must reserve at least one byte")
 )
 
 type InsufficientStorageError struct {

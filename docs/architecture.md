@@ -144,7 +144,7 @@ Reads the account (a single-row read is consistent without an explicit transacti
 
 | Layer | Responsibility |
 |---|---|
-| `domain` | Defines the errors. Business refusals carry their facts: `InsufficientStorageError{RequestedBytes, AvailableBytes, LimitBytes}`, `TooManyActiveReservationsError{ActiveReservations, MaxActiveReservations}`, `IdempotencyKeyReusedError{OriginalBytes}`. Sentinels: `ErrAccountNotFound`, `ErrReservationNotFound`, `ErrRequestInProgress`, `ErrLimitUnavailable`, `ErrServiceUnavailable`. |
+| `domain` | Defines the errors. Business refusals carry their facts: `InsufficientStorageError{RequestedBytes, AvailableBytes, LimitBytes}`, `TooManyActiveReservationsError{ActiveReservations, MaxActiveReservations}`, `IdempotencyKeyReusedError{OriginalBytes}`. Sentinels: `ErrAccountNotFound`, `ErrReservationNotFound`, `ErrRequestInProgress`, `ErrLimitUnavailable`, `ErrServiceUnavailable`. `ErrBytesNotPositive` guards the aggregate; the handler refuses such requests first, so it never reaches a client. |
 | `repository/sqlite` | Translates driver errors. No rows becomes a not-found sentinel; busy, locked, I/O error or closed database becomes `ErrServiceUnavailable`: `fmt.Errorf("%w: begin reserve: %v", domain.ErrServiceUnavailable, err)`. The sentinel is wrapped with `%w`; the driver cause only with `%v`, so its text reaches the logs but `errors.As` cannot reach the SQLite error. No SQLite error leaves this package. |
 | `handler` | Maps errors to status, `code` and `detail` with `errors.Is` / `errors.As` (catalogue in [api.md](api.md#errors)). Anything unrecognized becomes `500 internal_error`, logged with its `request_id`. |
 

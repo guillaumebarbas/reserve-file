@@ -53,6 +53,15 @@ func invalidRequest(detail string) invalidInputError {
 	}}
 }
 
+func invalidIdempotencyKey(detail string) invalidInputError {
+	return invalidInputError{problem: problemBody{
+		Status: http.StatusBadRequest,
+		Code:   "invalid_idempotency_key",
+		Title:  "Invalid idempotency key",
+		Detail: detail,
+	}}
+}
+
 func requestTooLarge() invalidInputError {
 	return invalidInputError{problem: problemBody{
 		Status: http.StatusRequestEntityTooLarge,

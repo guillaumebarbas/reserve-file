@@ -17,7 +17,7 @@ One ticket per step: the foundations, each feature, and each edge case or small 
 | [T03](T03-http-foundation.md) | HTTP foundation and error format | Foundation | P0 | 30 min | T01 | [#3](https://github.com/guillaumebarbas/reserve-file/issues/3) | `feat/t03-http-foundation` | 30 min |
 | [T04](T04-external-limit.md) | External limit: fetch, cache and refresh | Foundation | P0 | 25 min | T02, T03 | [#4](https://github.com/guillaumebarbas/reserve-file/issues/4) | `feat/t04-external-limit` | 20 min |
 | [T05](T05-usage.md) | Account usage | Feature | P0 | 15 min | T04 | [#5](https://github.com/guillaumebarbas/reserve-file/issues/5) | `feat/t05-usage` | 20 min |
-| [T06](T06-reserve.md) | Reserve storage | Feature | P0 | 30 min | T05 | [#6](https://github.com/guillaumebarbas/reserve-file/issues/6) | `feat/t06-reserve` | |
+| [T06](T06-reserve.md) | Reserve storage | Feature | P0 | 30 min | T05 | [#6](https://github.com/guillaumebarbas/reserve-file/issues/6) | `feat/t06-reserve` | 30 min |
 | [T07](T07-concurrent-reservations.md) | Concurrent reservations never exceed the limits | Case | P0 | 20 min | T06 | [#7](https://github.com/guillaumebarbas/reserve-file/issues/7) | `feat/t07-concurrent-reservations` | |
 | [T08](T08-retry-after-lost-response.md) | Retry after a lost response | Case | P0 | 20 min | T06 | [#8](https://github.com/guillaumebarbas/reserve-file/issues/8) | `feat/t08-retry-after-lost-response` | |
 | [T09](T09-release.md) | Release and read a reservation | Feature | P0 | 20 min | T06 | [#9](https://github.com/guillaumebarbas/reserve-file/issues/9) | `feat/t09-release` | |

@@ -17,6 +17,7 @@ func TestErrors_Messages(t *testing.T) {
 		{"request_in_progress", ErrRequestInProgress, "request in progress"},
 		{"limit_unavailable", ErrLimitUnavailable, "limit unavailable"},
 		{"service_unavailable", ErrServiceUnavailable, "service unavailable"},
+		{"bytes_not_positive", ErrBytesNotPositive, "a reservation must reserve at least one byte"},
 		{
 			"insufficient_storage",
 			InsufficientStorageError{RequestedBytes: 300, AvailableBytes: 200, LimitBytes: 1000},
