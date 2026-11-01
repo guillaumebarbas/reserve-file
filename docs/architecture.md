@@ -162,7 +162,7 @@ The `limits` package, whose `Cache` type holds the value:
 
 **Startup (`app.Run`):** read the configuration, open the database (pragmas, migration, account seeding), start `limits`, start the HTTP server.
 
-**Shutdown (SIGINT or SIGTERM):** stop accepting connections and let in-flight requests finish (`http.Server.Shutdown`, 10 s), stop the refresher, close the database. If the server stops on its own, the same shutdown runs, as after a signal.
+**Shutdown (SIGINT or SIGTERM):** the signal cancels the application context. The HTTP server stops accepting connections and lets in-flight requests finish (`http.Server.Shutdown`, 10 s), while the limits refresher, which runs on that context, stops. `app` waits for both, then closes the database last. If the server stops on its own, the same shutdown runs, and `app` stops the refresher once the server has stopped.
 
 **HTTP server timeouts:** read header 5 s, read 10 s, write 15 s, idle 60 s. The write timeout is longer than SQLite's 5 s busy timeout, so a `503` sent after a lock wait still reaches the client.
 
