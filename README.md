@@ -177,6 +177,16 @@ It uses `small_account` (100 MiB) and prints, for each step, the expected and th
 
 It stops with a non-zero exit code at the first unexpected answer. Even then it releases what it created, so it can run again. The script is [scripts/demo.sh](scripts/demo.sh): POSIX shell and curl, run in a `curlimages/curl` container.
 
+### Restart
+
+All the state is in the database. Reserve something, then restart the service: usage is unchanged, and a retry with the same key is still replayed.
+
+```sh
+docker compose restart api
+```
+
+On `docker compose stop` (SIGTERM), the server stops accepting connections, lets the requests in progress finish, then closes the database; the log ends with `server stopped`.
+
 ## Design
 
 How reservations work; the endpoints are being built in T05 to T09.
@@ -191,9 +201,9 @@ The reasons, the invariants and the failure handling are in [docs/decisions.md](
 
 Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2).
 
-- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots (T06); concurrent reservations serialized by `BEGIN IMMEDIATE`, so they never exceed the limit or the slots (T07); a retry with the same key replayed instead of reserved twice (T08); a known key reused with another size refused with `422` (T14); reading and releasing a reservation (T09); a repeated or concurrent release giving the space back once (T10); invalid keys and sizes refused with a precise detail (T13); the limit source retried with a backoff while the limit is unknown (T18, part 1).
+- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots (T06); concurrent reservations serialized by `BEGIN IMMEDIATE`, so they never exceed the limit or the slots (T07); a retry with the same key replayed instead of reserved twice (T08); a known key reused with another size refused with `422` (T14); reading and releasing a reservation (T09); a repeated or concurrent release giving the space back once (T10); the state surviving a restart, and the requests in progress finishing before the database closes (T11); invalid keys and sizes refused with a precise detail (T13); the limit source retried with a backoff while the limit is unknown (T18, part 1).
 - **In progress:** this README and the demo (T12).
-- **Not started:** restart and shutdown proofs (T11), the other edge cases (T15 to T17, T19 to T21, and the end-to-end part of T18), container tests (T22), OpenAPI (T23).
+- **Not started:** the other edge cases (T15 to T17, T19 to T21, and the end-to-end part of T18), container tests (T22), OpenAPI (T23).
 
 Time spent so far: T01 35 min, T02 30 min, T03 30 min, then T04 to T09, T13 and part of T18 built in parallel by agents in about 1 h of wall-clock time, after the design and tooling work (docs, tickets, rules, GitHub setup).
 
