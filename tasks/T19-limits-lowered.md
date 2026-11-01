@@ -19,9 +19,9 @@ Nothing is revoked: existing reservations stay active, and new ones are refused 
 
 ## Technical acceptance criteria
 
-- [ ] `account.Reserve` refuses when `limit − reserved` is negative, without overflow.
-- [ ] `available_bytes` never goes below 0; `reserved_bytes` and `active_reservations` may exceed their limits.
-- [ ] Release works in this state and brings usage back down.
+- [x] `account.Reserve` refuses when `limit − reserved` is negative, without overflow.
+- [x] `available_bytes` never goes below 0; `reserved_bytes` and `active_reservations` may exceed their limits.
+- [x] Release works in this state and brings usage back down.
 
 ## User acceptance criteria
 
@@ -33,13 +33,34 @@ The user is a client application. Account `small_account`.
 ## Tests
 
 Unit (`internal/domain`):
-- [ ] `TestAccount_Reserve` — adds: usage above a lowered limit; active reservations above a lowered maximum.
+- [x] `TestAccount_Reserve` — adds `active_reservations_above_a_lowered_maximum`; `usage_above_a_lowered_limit` already existed since T06.
 
-Integration (`internal/repository/sqlite`, `internal/handler`):
-- [ ] `TestReserve_AfterStorageLimitLowered`
-- [ ] `TestReserve_AfterMaxActiveLowered`
-- [ ] `TestAPI_UsageAfterLimitLowered` — `available_bytes: 0`, `reserved_bytes` above `limit_bytes`.
+Integration (`internal/repository/sqlite`, `internal/handler`, `internal/app`):
+- [x] `TestReserve_AfterStorageLimitLowered` — 90 MiB reserved, the store reopened with `small_account` lowered to 50 MiB: 1 MiB more is refused with `available_bytes` 0, nothing is revoked or written.
+- [x] `TestRelease_BringsUsageBackUnderALoweredLimit` *(added)* — one release leaves 60 MiB, still refused; a second leaves 30 MiB, and the 20 MiB left fit exactly.
+- [x] `TestReserve_AfterMaxActiveLowered` — 5 active reservations and `MAX_PARALLEL_CHUNKS` lowered to 3: refused with 5 active for 3 allowed, nothing written.
+- [x] `TestRelease_BringsActiveReservationsBackUnderALoweredMaximum` *(added)* — still refused at exactly 3 active, accepted once 2 are left.
+- [x] `TestAPI_UsageAfterLimitLowered` — `available_bytes: 0`, `reserved_bytes` above `limit_bytes`, and `409 insufficient_storage` with `available_bytes` 0.
+- [x] `TestAPI_ReleaseAfterLimitLowered` *(added)* — releases answer `200` above the lowered limit, and a reservation fits again once usage is back under it.
+- [x] `TestAPI_ReserveAfterMaxActiveLowered` *(added)* — usage shows 5 active for a maximum of 3, `409 too_many_active_reservations`, then releases and a new reservation.
+- [x] `TestRun_AppliesALoweredLimitAtRestart` *(added)* — the operator's path: `Run` restarted on the same database with `SEED_ACCOUNTS` lowering `small_account` to 50 MiB.
 
 ## Test results
 
-_Not run yet._
+Run on 2026-11-01.
+
+- `gofmt -l .` prints nothing; `go vet ./...` passes; no comments in the Go code apart from `//go:embed`.
+- `go test ./...` (also with `-shuffle=on`): 123 tests and 164 subtests pass, none fail or skip (`app` 14, `domain` 6, `handler` 35, `limits` 18, `repository/sqlite` 43, `service` 7). Every package is at 100% on its own.
+- `docker compose run --rm test`: passes with the race detector; coverage of `./internal/...` is 100.0%.
+- No production change: the behaviour already existed. The seed updates only the limit (T02), `AvailableBytes` never goes below 0 (T05), the space check subtracts (T06), and release never looks at a limit (T09, T10). So every new test passed as soon as it was written, and each one was run against a deliberate mutation of the code, reverted afterwards. Each mutation made it fail:
+  - the slot check refusing only at exactly the maximum (`==` instead of `>=`): the new domain row, `TestReserve_AfterMaxActiveLowered` and `TestAPI_ReserveAfterMaxActiveLowered` admit a sixth reservation;
+  - the slot check letting one in at the maximum (`>` instead of `>=`): `TestRelease_BringsActiveReservationsBackUnderALoweredMaximum` admits a fourth at 3 for 3;
+  - the seed resetting the counters at restart: `TestReserve_AfterStorageLimitLowered` sees 0 reserved, admits 1 MiB and breaks the invariants;
+  - the space check against the limit alone, forgetting what is reserved: `TestReserve_AfterStorageLimitLowered` and `TestRelease_BringsUsageBackUnderALoweredLimit` admit 1 MiB above the lowered limit;
+  - an exact fit refused (`>=` instead of `>` in the space check): `TestRelease_BringsUsageBackUnderALoweredLimit` and `TestAPI_ReleaseAfterLimitLowered` refuse the 20 MiB left;
+  - `AvailableBytes` without `max(0, …)`: `TestAPI_UsageAfterLimitLowered` shows `available_bytes` at −41943040, in the usage and in the refusal;
+  - the seed ignoring a changed limit (`ON CONFLICT DO NOTHING`): `TestRun_AppliesALoweredLimitAtRestart` keeps the 100 MiB limit and admits 1 MiB.
+- Container, checked by hand on a separate Compose project, removed afterwards:
+  - 3 × 30 MiB reserved on `small_account`;
+  - the container recreated with `SEED_ACCOUNTS=large_account:10737418240,small_account:52428800`: usage shows `limit_bytes` 52428800, `reserved_bytes` 94371840, `available_bytes` 0 and 3 active; 1 MiB more gets `409 insufficient_storage` with `available_bytes` 0;
+  - two releases answer `200`, leaving 30 MiB and 20 MiB available, then 20 MiB fit exactly (`201`).

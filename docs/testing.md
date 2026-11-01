@@ -35,12 +35,13 @@ Unit and integration tests live next to the code they test and run together. Why
 |---|---|
 | Response lost | Call, discard the result, call again with the same key |
 | Request still in progress | Fake repository blocked on a channel |
-| Lock contention | A second connection holding `BEGIN IMMEDIATE`; the repository opened with a 100 ms busy timeout |
+| Lock contention | A second connection holding `BEGIN IMMEDIATE`. The store's pool is limited to one connection, whose `busy_timeout` the test lowers to 100 ms, so the test does not wait the real 5 s |
 | Database gone | `db.Close()` before the call |
-| Read-only database | The file opened with `mode=ro` |
-| Disk full | `PRAGMA max_page_count` lowered by the test, so the next write fails with `SQLITE_FULL` |
-| A statement fails mid-transaction | A trigger created by the test: `CREATE TRIGGER … BEGIN SELECT RAISE(ABORT, 'injected'); END` |
-| Client disconnects | The context cancelled during the transaction |
+| Read-only database | A second store on the same file, opened with `mode=ro` |
+| Disk full | `PRAGMA max_page_count` set to the current page count on the store's only connection. A reservation whose key spills over several pages then needs new pages to be written or rewritten, and fails with `SQLITE_FULL` |
+| Database refusing writes, then recovering, through the API | A trigger created by a second connection aborts every insert, then is dropped |
+| A statement fails mid-transaction | A trigger created by the test: `CREATE TRIGGER … BEGIN SELECT RAISE(ABORT, 'injected'); END`. A read fails when the test renames its table (`ALTER TABLE accounts RENAME TO hidden_accounts`), then renames it back to check the state and retry |
+| Client disconnects | The context cancelled between two statements of the transaction: a trigger calls a SQL function the test registers with the driver (`sqlite.RegisterScalarFunction`), and that function cancels the context. No sleep, and always at the same point |
 | Crash or restart | Close and reopen the store on the same file; in container tests, `docker compose restart` and `docker compose kill -s SIGKILL` |
 | Limit source down, slow or wrong | `httptest.Server` returning 500, sleeping past the timeout, or serving invalid payloads |
 | Client gone while the response is written | A `ResponseWriter` whose `Write` fails |
@@ -85,6 +86,8 @@ go test -cover ./...             # quick coverage per package
 docker compose run --rm test     # go vet, race detector, 100% coverage check
 go test -tags e2e ./e2e/...      # container tests (needs Go and Docker)
 ```
+
+The container tests start the image with `compose.yaml` and `compose.e2e.yaml` as Compose project `reserve-e2e`, publishing the API on port 18090, so a developer's stack is untouched. `compose.e2e.yaml` adds an `env-stub` service, an nginx serving `e2e/testdata/env.json` (only `MAX_PARALLEL_CHUNKS: 5`, never the real payload), and seeds the default accounts explicitly. Each test starts from a fresh volume, waits for `/readyz` instead of sleeping, and runs `docker compose down --volumes --rmi local` in `t.Cleanup`, so it cleans up even after a failure. The `e2e` build tag keeps them out of `go test ./...` and of the coverage metric.
 
 ## Demo script
 
