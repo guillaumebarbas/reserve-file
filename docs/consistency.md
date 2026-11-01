@@ -143,9 +143,9 @@ Concurrent requests with different keys are not refused for being concurrent: pa
 
 **Problem.** The reservation was committed but the client never got the response (timeout, network cut, crash after commit). A naive retry reserves the space twice and takes a second slot.
 
-**Solution.** The retry carries the same `Idempotency-Key`. Step 1 finds the reservation and returns it with `200` and `Idempotent-Replayed: true`: no extra bytes, no extra slot.
+**Solution.** The retry carries the same `Idempotency-Key`. The key lookup (step 2) finds the reservation and returns it in its current state, with `200` and `Idempotent-Replayed: true`: no extra bytes, no extra slot. A refused or failed attempt stores nothing, so its retry is evaluated again.
 
-**Proved by.** `TestReserve_RetryReturnsSameReservation`, `TestAPI_ReserveRetry`.
+**Proved by.** `TestAccount_Reserve`, `TestReserve_RetryReturnsSameReservation`, `TestReserve_RefusedAttemptIsNotRemembered`, `TestAPI_ReserveRetry`.
 
 ### P3 — The same request arrives twice at the same time
 
@@ -264,6 +264,8 @@ On SIGTERM, the server stops accepting connections, finishes in-flight requests 
 ### P15 — The client generates a new key for each retry
 
 The service cannot prevent this, because it cannot tell such a retry from a new request of the same size. The API contract tells clients to generate the key once per logical request ([api.md](api.md#idempotency)).
+
+**Proved by.** `TestReserve_DifferentKeysCreateDifferentReservations`: two keys give two reservations, as the contract says.
 
 ## Gaps that would block a production release
 
