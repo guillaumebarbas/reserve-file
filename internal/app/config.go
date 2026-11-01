@@ -13,11 +13,12 @@ import (
 )
 
 type Config struct {
-	HTTPAddress  string
-	LogLevel     slog.Level
-	DatabasePath string
-	SeedAccounts map[string]int64
-	LimitSource  limits.Config
+	HTTPAddress       string
+	LogLevel          slog.Level
+	DatabasePath      string
+	SeedAccounts      map[string]int64
+	LimitSource       limits.Config
+	CORSAllowedOrigin string
 }
 
 func loadConfig(getEnvironmentVariable func(string) string) (Config, error) {
@@ -59,6 +60,13 @@ func loadConfig(getEnvironmentVariable func(string) string) (Config, error) {
 	}
 	config.LimitSource = limitSource
 
+	if corsAllowedOrigin := getEnvironmentVariable("CORS_ALLOWED_ORIGIN"); corsAllowedOrigin != "" {
+		if !isOrigin(corsAllowedOrigin) {
+			return Config{}, fmt.Errorf("CORS_ALLOWED_ORIGIN: %q is not an origin such as http://localhost:8081, without a path", corsAllowedOrigin)
+		}
+		config.CORSAllowedOrigin = corsAllowedOrigin
+	}
+
 	return config, nil
 }
 
@@ -94,6 +102,11 @@ func loadLimitSourceConfig(getEnvironmentVariable func(string) string) (limits.C
 func isAbsoluteHTTPURL(text string) bool {
 	parsedURL, err := url.Parse(text)
 	return err == nil && (parsedURL.Scheme == "http" || parsedURL.Scheme == "https") && parsedURL.Host != ""
+}
+
+func isOrigin(text string) bool {
+	parsedURL, err := url.Parse(text)
+	return err == nil && isAbsoluteHTTPURL(text) && text == parsedURL.Scheme+"://"+parsedURL.Host
 }
 
 func parsePositiveDuration(text string) (time.Duration, error) {

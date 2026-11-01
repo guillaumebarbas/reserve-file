@@ -159,6 +159,21 @@ func TestLoadConfig_InvalidValues(t *testing.T) {
 			environment:  map[string]string{"ENV_CONFIG_TIMEOUT": "-1s"},
 			wantVariable: "ENV_CONFIG_TIMEOUT",
 		},
+		{
+			name:         "cors_origin_without_scheme",
+			environment:  map[string]string{"CORS_ALLOWED_ORIGIN": "localhost:8081"},
+			wantVariable: "CORS_ALLOWED_ORIGIN",
+		},
+		{
+			name:         "cors_origin_with_path",
+			environment:  map[string]string{"CORS_ALLOWED_ORIGIN": "http://localhost:8081/docs"},
+			wantVariable: "CORS_ALLOWED_ORIGIN",
+		},
+		{
+			name:         "cors_origin_with_trailing_slash",
+			environment:  map[string]string{"CORS_ALLOWED_ORIGIN": "http://localhost:8081/"},
+			wantVariable: "CORS_ALLOWED_ORIGIN",
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -169,6 +184,29 @@ func TestLoadConfig_InvalidValues(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), testCase.wantVariable) {
 				t.Errorf("loadConfig(%v): error %q does not name %s", testCase.environment, err, testCase.wantVariable)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_CORSAllowedOrigin(t *testing.T) {
+	testCases := []struct {
+		name        string
+		environment map[string]string
+		want        string
+	}{
+		{name: "off_by_default", environment: map[string]string{}, want: ""},
+		{name: "swagger_ui_origin", environment: map[string]string{"CORS_ALLOWED_ORIGIN": "http://localhost:8081"}, want: "http://localhost:8081"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := loadConfig(fakeEnvironment(testCase.environment))
+
+			if err != nil {
+				t.Fatalf("loadConfig(%v): unexpected error: %v", testCase.environment, err)
+			}
+			if got.CORSAllowedOrigin != testCase.want {
+				t.Errorf("loadConfig(%v): CORSAllowedOrigin: got %q, want %q", testCase.environment, got.CORSAllowedOrigin, testCase.want)
 			}
 		})
 	}
