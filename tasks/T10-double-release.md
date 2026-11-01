@@ -21,7 +21,7 @@ Case: the same reservation is released twice, by a retry or from two devices, po
 
 ## User acceptance criteria
 
-The user is a client application. Account `acc_small`.
+The user is a client application. Account `small_account`.
 
 - Given an active 30 MiB reservation, when the app releases it twice, then both calls return `200` with the same body, and usage shows 30 MiB less, once.
 - Given 20 releases of the same reservation arrive at the same time, then usage shows 30 MiB less, once.

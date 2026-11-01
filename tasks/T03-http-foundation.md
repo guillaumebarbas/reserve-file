@@ -15,7 +15,7 @@ Everything the endpoints share: the router, request IDs, access logs, panic reco
 
 ## Technical acceptance criteria
 
-- [ ] `internal/domain/errors.go` defines the typed errors `InsufficientStorageError`, `TooManyActiveError` and `KeyReusedError`, which carry their values, and the sentinels `ErrAccountNotFound`, `ErrReservationNotFound`, `ErrRequestInProgress`, `ErrLimitUnavailable` and `ErrUnavailable`.
+- [ ] `internal/domain/errors.go` defines the typed errors `InsufficientStorageError`, `TooManyActiveReservationsError` and `IdempotencyKeyReusedError`, which carry their values, and the sentinels `ErrAccountNotFound`, `ErrReservationNotFound`, `ErrRequestInProgress`, `ErrLimitUnavailable` and `ErrServiceUnavailable`.
 - [ ] Middleware:
   - request ID (16 random hex characters), returned in `X-Request-Id` and attached to every log line;
   - access log: method, path, status, duration;

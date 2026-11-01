@@ -25,7 +25,7 @@ In every case the retry returns the original reservation, because the key is loo
 
 ## User acceptance criteria
 
-The user is a client application. Account `acc_small`.
+The user is a client application. Account `small_account`.
 
 - Given the reservation made with K was released, when the app retries K, then it gets `200` with the released reservation, and nothing is reserved.
 - Given the account is full or has 5 active reservations, when the app retries K, then it gets `200` with its reservation.

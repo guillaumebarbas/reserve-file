@@ -25,8 +25,8 @@
 
 The user is a client application.
 
-- Given `acc_demo` with nothing reserved, when the app requests its usage, then it gets `limit_bytes: 10737418240`, `reserved_bytes: 0`, `available_bytes: 10737418240`, `active_reservations: 0` and `max_active_reservations: 5`.
-- Given an unknown account `acc_x`, when the app requests its usage, then it gets `404` with "Account 'acc_x' does not exist."
+- Given `large_account` with nothing reserved, when the app requests its usage, then it gets `limit_bytes: 10737418240`, `reserved_bytes: 0`, `available_bytes: 10737418240`, `active_reservations: 0` and `max_active_reservations: 5`.
+- Given an unknown account `unknown_account`, when the app requests its usage, then it gets `404` with "Account 'unknown_account' does not exist."
 - Given `MAX_PARALLEL_CHUNKS` has never been obtained, when the app requests usage, then `max_active_reservations` is `null` and the other fields are correct.
 
 ## Tests

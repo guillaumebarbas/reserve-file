@@ -23,7 +23,7 @@
 
 ## User acceptance criteria
 
-The user is a client application. Account `acc_small`.
+The user is a client application. Account `small_account`.
 
 - Given an active 30 MiB reservation, when the app releases it, then it gets `200` with `status: released` and a `released_at`, and usage shows 30 MiB and one active reservation less.
 - Given a reservation, when the app reads it, then it gets its ID, size, status and dates.

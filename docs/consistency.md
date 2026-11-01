@@ -212,7 +212,7 @@ The payload contains analytics tokens and is never logged.
 
 **Problem.** The lock is held longer than `busy_timeout`, the disk is full, an I/O error occurs, or the database is closed.
 
-**Solution.** Each operation is a single transaction: on error it rolls back, so nothing is partially applied. The repository maps these errors to `ErrUnavailable`, which the API returns as `503 service_unavailable` with `Retry-After: 1`. Retrying with the same key is safe. `/readyz` reports the database as down.
+**Solution.** Each operation is a single transaction: on error it rolls back, so nothing is partially applied. The repository maps these errors to `ErrServiceUnavailable`, which the API returns as `503 service_unavailable` with `Retry-After: 1`. Retrying with the same key is safe. `/readyz` reports the database as down.
 
 **Proved by.** `TestReserve_DatabaseLockedReturnsUnavailable`, `TestRepository_ClosedDatabaseReturnsUnavailable`, `TestRepository_ReadOnlyDatabaseReturnsUnavailable`, `TestRepository_DiskFullReturnsUnavailable`, `TestReserve_CounterUpdateFailureRollsBack`, `TestRelease_CounterUpdateFailureRollsBack`, `TestAPI_DatabaseClosedReturns503`.
 

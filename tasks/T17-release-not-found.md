@@ -22,7 +22,7 @@ Case: the app releases or reads a reservation ID that does not exist, or that be
 
 The user is a client application.
 
-- Given a reservation of `acc_demo`, when the app releases or reads it through `acc_small`, then it gets `404`, exactly as for an ID that does not exist.
+- Given a reservation of `large_account`, when the app releases or reads it through `small_account`, then it gets `404`, exactly as for an ID that does not exist.
 
 ## Tests
 

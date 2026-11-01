@@ -15,7 +15,7 @@ Cases: the database stays locked longer than the busy timeout, the disk is full,
 
 ## Technical acceptance criteria
 
-- [ ] Busy, locked, full, read-only, I/O and closed-database errors are translated to `ErrUnavailable`, which gives `503 service_unavailable` with `Retry-After: 1` and no internal text.
+- [ ] Busy, locked, full, read-only, I/O and closed-database errors are translated to `ErrServiceUnavailable`, which gives `503 service_unavailable` with `Retry-After: 1` and no internal text.
 - [ ] Nothing is written when the request fails.
 - [ ] `/readyz` returns `503` while the database does not answer.
 
