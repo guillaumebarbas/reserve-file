@@ -4,7 +4,10 @@ import "time"
 
 type ReservationStatus string
 
-const StatusActive ReservationStatus = "active"
+const (
+	StatusActive   ReservationStatus = "active"
+	StatusReleased ReservationStatus = "released"
+)
 
 type Reservation struct {
 	ID             string
@@ -13,6 +16,7 @@ type Reservation struct {
 	Bytes          int64
 	Status         ReservationStatus
 	CreatedAt      time.Time
+	ReleasedAt     time.Time
 }
 
 type MaxActive struct {
