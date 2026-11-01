@@ -10,7 +10,10 @@ import (
 	"github.com/guillaumebarbas/reserve-file/internal/domain"
 )
 
-const selectReservationByKey = `SELECT id, bytes, status, created_at FROM reservations WHERE account_id = ? AND idempotency_key = ?`
+const (
+	selectReservation      = `SELECT id, account_id, idempotency_key, bytes, status, created_at, released_at FROM reservations WHERE id = ? AND account_id = ?`
+	selectReservationByKey = `SELECT id, account_id, idempotency_key, bytes, status, created_at, released_at FROM reservations WHERE account_id = ? AND idempotency_key = ?`
+)
 
 func (store *Store) Reserve(ctx context.Context, candidate domain.Reservation, maxActive domain.MaxActive) (domain.Reservation, domain.Outcome, error) {
 	transaction, err := store.database.BeginTx(ctx, nil)
@@ -43,23 +46,39 @@ func (store *Store) Reserve(ctx context.Context, candidate domain.Reservation, m
 }
 
 func findReservationByKey(ctx context.Context, transaction *sql.Tx, accountID, idempotencyKey string) (*domain.Reservation, error) {
-	var reservationID, status string
-	var bytes, createdAtMilliseconds int64
-	err := transaction.QueryRowContext(ctx, selectReservationByKey, accountID, idempotencyKey).Scan(&reservationID, &bytes, &status, &createdAtMilliseconds)
-	if errors.Is(err, sql.ErrNoRows) {
+	reservation, err := scanReservation(transaction.QueryRowContext(ctx, selectReservationByKey, accountID, idempotencyKey))
+	if errors.Is(err, domain.ErrReservationNotFound) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, translateDriverError("find the reservation of key "+idempotencyKey, err)
+		return nil, err
 	}
-	return &domain.Reservation{
+	return &reservation, nil
+}
+
+func scanReservation(row *sql.Row) (domain.Reservation, error) {
+	var reservationID, accountID, idempotencyKey, status string
+	var bytes, createdAt int64
+	var releasedAt sql.NullInt64
+	err := row.Scan(&reservationID, &accountID, &idempotencyKey, &bytes, &status, &createdAt, &releasedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Reservation{}, domain.ErrReservationNotFound
+	}
+	if err != nil {
+		return domain.Reservation{}, translateDriverError("read reservation", err)
+	}
+	reservation := domain.Reservation{
 		ID:             reservationID,
 		AccountID:      accountID,
 		IdempotencyKey: idempotencyKey,
 		Bytes:          bytes,
 		Status:         domain.ReservationStatus(status),
-		CreatedAt:      time.UnixMilli(createdAtMilliseconds).UTC(),
-	}, nil
+		CreatedAt:      time.UnixMilli(createdAt).UTC(),
+	}
+	if releasedAt.Valid {
+		reservation.ReleasedAt = time.UnixMilli(releasedAt.Int64).UTC()
+	}
+	return reservation, nil
 }
 
 func insertReservation(ctx context.Context, transaction *sql.Tx, reservation domain.Reservation) error {
