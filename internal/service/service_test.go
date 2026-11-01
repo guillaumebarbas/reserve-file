@@ -12,6 +12,8 @@ type fakeAccountRepository struct {
 	reserveErr        error
 	reservedCandidate domain.Reservation
 	reservedMaxActive domain.MaxActive
+	storedReservation domain.Reservation
+	releaseRequest    releaseRequest
 }
 
 func (repository *fakeAccountRepository) Account(ctx context.Context, accountID string) (domain.Account, error) {

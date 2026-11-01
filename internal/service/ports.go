@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/guillaumebarbas/reserve-file/internal/domain"
 )
@@ -9,6 +10,8 @@ import (
 type AccountRepository interface {
 	Account(ctx context.Context, accountID string) (domain.Account, error)
 	Reserve(ctx context.Context, candidate domain.Reservation, maxActive domain.MaxActive) error
+	Release(ctx context.Context, accountID, reservationID string, releasedAt time.Time) (domain.Reservation, error)
+	Reservation(ctx context.Context, accountID, reservationID string) (domain.Reservation, error)
 }
 
 type LimitProvider interface {

@@ -55,11 +55,15 @@ func readReserveRequest(writer http.ResponseWriter, request *http.Request) (stri
 }
 
 func newReservationBody(reservation domain.Reservation) reservationBody {
-	return reservationBody{
+	body := reservationBody{
 		ID:        reservation.ID,
 		AccountID: reservation.AccountID,
 		Bytes:     reservation.Bytes,
 		Status:    string(reservation.Status),
 		CreatedAt: reservation.CreatedAt,
 	}
+	if reservation.Status == domain.StatusReleased {
+		body.ReleasedAt = &reservation.ReleasedAt
+	}
+	return body
 }
