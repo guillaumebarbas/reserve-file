@@ -28,7 +28,7 @@ What the reviewer reads and runs first. The README answers the four points of th
   - links to `docs/` and `tasks/`.
 - [x] Every command in the README has been run on a fresh clone.
 - [x] The base images (`golang`, `gcr.io/distroless/static`) are pinned by digest in the `Dockerfile` and `compose.yaml`, so the reviewer builds exactly what was tested. Raised in the review of #25.
-- [ ] At submission, the repository and the project board are made public: `gh repo edit guillaumebarbas/reserve-file --visibility public --accept-visibility-change-consequences` and `gh project edit 2 --owner guillaumebarbas --visibility PUBLIC`.
+- [x] At submission, the repository and the project board are made public: `gh repo edit guillaumebarbas/reserve-file --visibility public --accept-visibility-change-consequences` and `gh project edit 2 --owner guillaumebarbas --visibility PUBLIC`.
 - [x] The README is updated after every ticket done later.
 
 ## User acceptance criteria
@@ -87,4 +87,4 @@ The user is the reviewer, with only Docker.
   - `docker compose run --rm openapi-lint`: valid;
   - `go test -tags e2e ./e2e/...`: the eight container tests pass in 60 s;
   - `docker compose down -v`: everything removed.
-- Remaining: making the repository and the project board public at submission, on the author's go.
+- Published on 2026-11-01, on the author's go: the repository and the project board are public, and the repository, its raw README and the board answer `200` without credentials.
