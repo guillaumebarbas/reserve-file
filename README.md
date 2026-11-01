@@ -68,11 +68,21 @@ X-Request-Id: b749a20a74cad954
 {"database":"ok","limits":"ok"}
 ```
 
+```sh
+curl -s http://localhost:8080/accounts/large_account/usage
+```
+
+```json
+{"account_id":"large_account","limit_bytes":10737418240,"reserved_bytes":0,"available_bytes":10737418240,"active_reservations":0,"max_active_reservations":5}
+```
+
+`max_active_reservations` is the current `MAX_PARALLEL_CHUNKS`, or `null` while it has never been obtained. An unknown account gives `404 account_not_found`.
+
 Every response carries an `X-Request-Id`; `docker compose logs api` shows one line per request with the same ID. Errors are `application/problem+json` with a stable `code`.
 
 | Method | Path | Purpose | Available |
 |---|---|---|---|
-| `GET` | `/accounts/{accountID}/usage` | Limit, reserved space and available space | With T05 |
+| `GET` | `/accounts/{accountID}/usage` | Limit, reserved space and available space | Yes |
 | `POST` | `/accounts/{accountID}/reservations` | Reserve space, with an `Idempotency-Key` | With T06 |
 | `GET` | `/accounts/{accountID}/reservations/{reservationID}` | Read a reservation | With T09 |
 | `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation | With T09 |
@@ -105,11 +115,11 @@ The reasons, the invariants and the failure handling are in [docs/decisions.md](
 
 Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2).
 
-- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04).
-- **In progress:** usage (T05), this README and the demo (T12).
+- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05).
+- **In progress:** this README and the demo (T12).
 - **Not started:** reserve, release, retries and concurrency (T06 to T11), the other edge cases (T13 to T21), container tests (T22), OpenAPI (T23).
 
-Time spent so far: T01 35 min, T02 30 min, T03 30 min, after the design and tooling work (docs, tickets, rules, GitHub setup).
+Time spent so far: T01 35 min, T02 30 min, T03 30 min, then T04 and T05 in parallel in about 20 min, after the design and tooling work (docs, tickets, rules, GitHub setup).
 
 ## How AI was used
 

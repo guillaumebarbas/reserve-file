@@ -17,7 +17,7 @@ func TestHealthz(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	recorder := httptest.NewRecorder()
 
-	New(slog.New(slog.DiscardHandler), nil, nil).ServeHTTP(recorder, request)
+	New(slog.New(slog.DiscardHandler), nil, nil, nil).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Errorf("status: got %d, want %d", recorder.Code, http.StatusOK)
@@ -44,7 +44,7 @@ func TestAPI_Readyz(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	var logOutput bytes.Buffer
-	routes := New(slog.New(slog.NewJSONHandler(&logOutput, nil)), store, fakeLimitProvider{maxActive: 5, known: true})
+	routes := New(slog.New(slog.NewJSONHandler(&logOutput, nil)), store, fakeLimitProvider{maxActive: 5, known: true}, nil)
 
 	openStatus, openBody := getReadiness(routes)
 	_ = store.Close()
@@ -67,7 +67,7 @@ func TestAPI_ReadyzReportsLimits(t *testing.T) {
 		t.Fatalf("open the database: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	routes := New(slog.New(slog.DiscardHandler), store, fakeLimitProvider{known: false})
+	routes := New(slog.New(slog.DiscardHandler), store, fakeLimitProvider{known: false}, nil)
 
 	status, body := getReadiness(routes)
 

@@ -15,8 +15,8 @@ One ticket per step: the foundations, each feature, and each edge case or small 
 | [T01](T01-scaffold.md) | Scaffold and walking skeleton | Foundation | P0 | 30 min | — | [#1](https://github.com/guillaumebarbas/reserve-file/issues/1) | `chore/t01-scaffold` | 35 min |
 | [T02](T02-database.md) | Database | Foundation | P0 | 25 min | T01 | [#2](https://github.com/guillaumebarbas/reserve-file/issues/2) | `feat/t02-database` | 30 min |
 | [T03](T03-http-foundation.md) | HTTP foundation and error format | Foundation | P0 | 30 min | T01 | [#3](https://github.com/guillaumebarbas/reserve-file/issues/3) | `feat/t03-http-foundation` | 30 min |
-| [T04](T04-external-limit.md) | External limit: fetch, cache and refresh | Foundation | P0 | 25 min | T02, T03 | [#4](https://github.com/guillaumebarbas/reserve-file/issues/4) | `feat/t04-external-limit` | |
-| [T05](T05-usage.md) | Account usage | Feature | P0 | 15 min | T04 | [#5](https://github.com/guillaumebarbas/reserve-file/issues/5) | `feat/t05-usage` | |
+| [T04](T04-external-limit.md) | External limit: fetch, cache and refresh | Foundation | P0 | 25 min | T02, T03 | [#4](https://github.com/guillaumebarbas/reserve-file/issues/4) | `feat/t04-external-limit` | 20 min |
+| [T05](T05-usage.md) | Account usage | Feature | P0 | 15 min | T04 | [#5](https://github.com/guillaumebarbas/reserve-file/issues/5) | `feat/t05-usage` | 20 min |
 | [T06](T06-reserve.md) | Reserve storage | Feature | P0 | 30 min | T05 | [#6](https://github.com/guillaumebarbas/reserve-file/issues/6) | `feat/t06-reserve` | |
 | [T07](T07-concurrent-reservations.md) | Concurrent reservations never exceed the limits | Case | P0 | 20 min | T06 | [#7](https://github.com/guillaumebarbas/reserve-file/issues/7) | `feat/t07-concurrent-reservations` | |
 | [T08](T08-retry-after-lost-response.md) | Retry after a lost response | Case | P0 | 20 min | T06 | [#8](https://github.com/guillaumebarbas/reserve-file/issues/8) | `feat/t08-retry-after-lost-response` | |
@@ -35,6 +35,8 @@ One ticket per step: the foundations, each feature, and each edge case or small 
 | [T21](T21-no-partial-state.md) | No partial state after a failure mid-transaction | Case | P1 | 15 min | T06, T09 | [#21](https://github.com/guillaumebarbas/reserve-file/issues/21) | `feat/t21-no-partial-state` | |
 | [T22](T22-container-tests.md) | Container tests | Delivery | P1 | 40 min | T11 | [#22](https://github.com/guillaumebarbas/reserve-file/issues/22) | `chore/t22-container-tests` | |
 | [T23](T23-openapi.md) | OpenAPI description and Swagger UI | Delivery | P2 | 30 min | T12 | [#23](https://github.com/guillaumebarbas/reserve-file/issues/23) | `feat/t23-openapi` | |
+
+**Actual time.** From T04 on, independent tickets are built in parallel by agents in separate worktrees; their actual time is the wall-clock time from launch to merge, so parallel tickets overlap.
 
 **Branches** follow [Conventional Branch](https://conventional-branch.github.io/): `chore/` for tooling and delivery, `feat/` for behaviour.
 

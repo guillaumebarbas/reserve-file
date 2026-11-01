@@ -39,6 +39,36 @@ func TestRun_ServesUntilContextCancelled(t *testing.T) {
 	}
 }
 
+func TestRun_ServesAccountUsage(t *testing.T) {
+	address, stop, result := startRunInBackground(t, map[string]string{"HTTP_ADDR": "127.0.0.1:0", "DB_PATH": newDatabasePath(t), "ENV_CONFIG_URL": unreachableLimitSource(t)})
+	defer func() {
+		stop()
+		<-result
+	}()
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	response, err := client.Get("http://" + address + "/accounts/large_account/usage")
+	if err != nil {
+		t.Fatalf("GET /accounts/large_account/usage: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("GET /accounts/large_account/usage status: got %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	var body struct {
+		AccountID      string `json:"account_id"`
+		LimitBytes     int64  `json:"limit_bytes"`
+		AvailableBytes int64  `json:"available_bytes"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode the usage body: %v", err)
+	}
+	if body.AccountID != "large_account" || body.LimitBytes != 10737418240 || body.AvailableBytes != 10737418240 {
+		t.Errorf("usage of the default large_account: got %+v, want a limit and available space of 10737418240 bytes", body)
+	}
+}
+
 func TestRun_FailsWhenAddressInUse(t *testing.T) {
 	occupiedListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -116,7 +146,7 @@ func TestRun_FetchesLimitAtStartup(t *testing.T) {
 }
 
 func TestHealthcheck_HealthyAndUnhealthy(t *testing.T) {
-	healthyServer := httptest.NewServer(handler.New(slog.New(slog.DiscardHandler), nil, nil))
+	healthyServer := httptest.NewServer(handler.New(slog.New(slog.DiscardHandler), nil, nil, nil))
 	defer healthyServer.Close()
 	failingServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusServiceUnavailable)
@@ -207,7 +237,7 @@ func startServerOnHost(t *testing.T, host string) string {
 	if err != nil {
 		t.Skipf("cannot listen on %s on this machine: %v", host, err)
 	}
-	server := httptest.NewUnstartedServer(handler.New(slog.New(slog.DiscardHandler), nil, nil))
+	server := httptest.NewUnstartedServer(handler.New(slog.New(slog.DiscardHandler), nil, nil, nil))
 	_ = server.Listener.Close()
 	server.Listener = listener
 	server.Start()

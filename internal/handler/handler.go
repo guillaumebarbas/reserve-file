@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+
+	"github.com/guillaumebarbas/reserve-file/internal/service"
 )
 
 type DatabasePinger interface {
@@ -18,6 +20,7 @@ type apiHandlers struct {
 	logger        *slog.Logger
 	database      DatabasePinger
 	limitProvider LimitProvider
+	storage       *service.Service
 }
 
 type livenessBody struct {
@@ -29,11 +32,12 @@ type readinessBody struct {
 	Limits   string `json:"limits"`
 }
 
-func New(logger *slog.Logger, database DatabasePinger, limitProvider LimitProvider) http.Handler {
-	handlers := &apiHandlers{logger: logger, database: database, limitProvider: limitProvider}
+func New(logger *slog.Logger, database DatabasePinger, limitProvider LimitProvider, storage *service.Service) http.Handler {
+	handlers := &apiHandlers{logger: logger, database: database, limitProvider: limitProvider, storage: storage}
 	routes := http.NewServeMux()
 	routes.HandleFunc("GET /healthz", handlers.reportLiveness)
 	routes.HandleFunc("GET /readyz", handlers.reportReadiness)
+	routes.HandleFunc("GET /accounts/{accountID}/usage", handlers.reportUsage)
 	return withRequestID(withAccessLog(logger, withPanicRecovery(handlers, routes)))
 }
 

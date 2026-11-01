@@ -15,11 +15,11 @@
 
 ## Technical acceptance criteria
 
-- [ ] `domain.Account` is the aggregate ([D20](../docs/decisions.md#d20--a-rich-account-aggregate-with-private-counters)): unexported counters, `RestoreAccount` to rebuild it from a row, the accessors `ReservedBytes()` and `ActiveReservations()`, and `AvailableBytes()`, which returns `max(0, limit − reserved)`.
-- [ ] The repository reads the account row in a single statement, without a transaction, and returns it as a `domain.Account`. An unknown account gives `ErrAccountNotFound`.
-- [ ] The service adds `max_active_reservations` from `LimitProvider`, `null` when the limit is unknown.
-- [ ] Response fields and names exactly as in api.md.
-- [ ] `404 account_not_found`; a database failure gives `503 service_unavailable`.
+- [x] `domain.Account` is the aggregate ([D20](../docs/decisions.md#d20--a-rich-account-aggregate-with-private-counters)): unexported counters, `RestoreAccount` to rebuild it from a row, the accessors `ReservedBytes()` and `ActiveReservations()`, and `AvailableBytes()`, which returns `max(0, limit − reserved)`.
+- [x] The repository reads the account row in a single statement, without a transaction, and returns it as a `domain.Account`. An unknown account gives `ErrAccountNotFound`.
+- [x] The service adds `max_active_reservations` from `LimitProvider`, `null` when the limit is unknown.
+- [x] Response fields and names exactly as in api.md.
+- [x] `404 account_not_found`; a database failure gives `503 service_unavailable`.
 
 ## User acceptance criteria
 
@@ -32,16 +32,28 @@ The user is a client application.
 ## Tests
 
 Unit (`internal/domain`, `internal/service`):
-- [ ] `TestAccount_AvailableBytesNeverNegative` — table, including usage above the limit.
-- [ ] `TestService_UsageCombinesAccountAndLimit` — with a known and with an unknown limit.
+- [x] `TestAccount_AvailableBytesNeverNegative` — table, including usage above the limit.
+- [x] `TestRestoreAccount_KeepsCounters` *(added)* — the accessors return the restored counters.
+- [x] `TestService_UsageCombinesAccountAndLimit` — with a known and with an unknown limit.
+- [x] `TestService_UsageReturnsAccountErrors` *(added)* — the repository's error reaches the caller.
 
-Integration (`internal/repository/sqlite`, `internal/handler`):
-- [ ] `TestAccount_ReturnsCounters`
-- [ ] `TestAccount_UnknownAccount`
-- [ ] `TestAPI_Usage`
-- [ ] `TestAPI_UsageUnknownAccount`
-- [ ] `TestAPI_UsageWhenLimitUnknown`
+Integration (`internal/repository/sqlite`, `internal/handler`, `internal/app`):
+- [x] `TestAccount_ReturnsCounters`
+- [x] `TestAccount_UnknownAccount`
+- [x] `TestAccount_DatabaseUnavailable` *(added)* — a closed database gives an error that wraps `domain.ErrServiceUnavailable` and nothing else.
+- [x] `TestAPI_Usage`
+- [x] `TestAPI_UsageUnknownAccount`
+- [x] `TestAPI_UsageWhenLimitUnknown`
+- [x] `TestRun_ServesAccountUsage` *(added)* — the usage route is wired through `app.Run`, with the default `large_account`.
 
 ## Test results
 
-_Not run yet._
+Run on 2026-11-01.
+
+- `gofmt -l .` prints nothing; `go vet ./...` passes.
+- `go test ./...` (also with `-shuffle=on`): 42 tests and 61 subtests pass, none fail or skip (`app` 10, `domain` 3, `handler` 14, `repository/sqlite` 13, `service` 2).
+- `docker compose run --rm test`: passes with the race detector; coverage of `./internal/...` is 100.0%.
+- Every test failed first on an assertion, except `TestService_UsageReturnsAccountErrors`, which passed at once because Go forces the error branch it covers: `service` coverage went from 83.3% to 100% with it.
+- Container, checked by hand on a separate Compose project, removed afterwards: `GET /accounts/large_account/usage` answers `200` with `limit_bytes` and `available_bytes` at 10737418240 and `max_active_reservations: null`; `GET /accounts/unknown_account/usage` answers `404 account_not_found` in `application/problem+json`.
+- `max_active_reservations` stayed `null` in the running service while T04 was built in parallel: a `limitNotLoadedYet` placeholder stood in for the limits cache.
+- Integration after T04 merged: `main` merged into this branch, the placeholder replaced by T04's cache and deleted, the duplicate `fakeLimitProvider` of the handler tests kept once, and `TestRun_ServesAccountUsage` pointed at an unreachable limit source. All packages stay at 100%. In the container, with the real source, `/readyz` answers `{"database":"ok","limits":"ok"}` and `GET /accounts/large_account/usage` returns `max_active_reservations: 5`.
