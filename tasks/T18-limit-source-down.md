@@ -19,10 +19,11 @@ Cases:
 
 ## Technical acceptance criteria
 
-- [ ] A failed fetch (error status, timeout, body over 1 MiB, invalid payload) keeps the current value and logs a warning without the body.
-- [ ] The persisted value is loaded before the first fetch.
-- [ ] While no value is known, fetches are retried with a backoff from 1 s to 30 s.
-- [ ] New reservations get `503 limit_unavailable` with `Retry-After: 5`, only while no value has ever been obtained.
+- [x] A failed fetch (error status, timeout, body over 1 MiB, invalid payload) keeps the current value and logs a warning without the body.
+- [x] The persisted value is loaded before the first fetch. Done and proved in T04.
+- [x] While no value is known, fetches are retried with a backoff from 1 s to 30 s.
+- [x] Added: a save that failed is retried at the next refresh, so a restart during an outage reloads the last valid value.
+- [ ] New reservations get `503 limit_unavailable` with `Retry-After: 5`, only while no value has ever been obtained. Part 2, once reservations exist (T06).
 
 ## User acceptance criteria
 
@@ -37,14 +38,28 @@ The user is a client application, and the operator.
 ## Tests
 
 Integration (`internal/limits`, `internal/handler`):
-- [ ] `TestFetcher_RejectsInvalidResponses` — table: status 500, response slower than the timeout, body over 1 MiB, invalid payloads.
-- [ ] `TestLimits_KeepsLastValidValueOnFailure`
-- [ ] `TestLimits_ReloadsPersistedValue` — a new instance with the source down starts with the stored value.
-- [ ] `TestLimits_UnknownUntilFirstSuccess` — and known as soon as the source recovers.
-- [ ] `TestLimits_NeverLogsBody` — the captured logs contain no token from the payload.
-- [ ] `TestAPI_ReserveWhenLimitUnknown` — `503 limit_unavailable`, `Retry-After: 5`.
-- [ ] `TestAPI_ReleaseWhenLimitUnknown` — `200`.
+- [x] `TestFetcher_RejectsInvalidResponses` — written in T04: status 500 and 404, body over 1 MiB, invalid value. The slow source is `TestFetcher_TimesOut`, and every kind of invalid payload is a row of `TestParseMaxParallelChunks`, both from T04.
+- [x] `TestLimits_KeepsLastValidValueOnFailure` — table, against a real source that first gives 5 then fails: status 500, body over 1 MiB, the value as a string, 0, a missing key. 5 stays in use and a warning is logged each time.
+- [x] `TestLimits_KeepsLastValidValueWhenSourceTimesOut` *(added: a slow source needs its own handler)* — 5 stays in use when the next fetch times out.
+- [x] `TestLimits_ReloadsPersistedValue` — written in T04: a new instance with the source down starts with the stored value.
+- [x] `TestLimits_UnknownUntilFirstSuccess` — three failures, then the source answers: unknown after `Init`, 5 as soon as the source answers, with attempts 1, 2 and 4 s apart, then 60 s.
+- [x] `TestLimits_RetriesWithBackoffWhileUnknown` *(added)* — with `testing/synctest`, two minutes of outage give attempts 1, 2, 4, 8, 16, 30 and 30 s apart.
+- [x] `TestLimits_NeverLogsBody` — at debug level, neither an accepted payload nor a rejected one puts any part of the payload in the log (token, key name, URL).
+- [x] `TestLimits_RetriesSaveAfterFailure` *(added)* — a save that fails is retried once by the next refresh, then the value is not written again.
+- [ ] `TestAPI_ReserveWhenLimitUnknown` — `503 limit_unavailable`, `Retry-After: 5`. Part 2.
+- [ ] `TestAPI_ReleaseWhenLimitUnknown` — `200`. Part 2.
 
 ## Test results
 
-_Not run yet._
+### Part 1: inside `internal/limits` (2026-11-01)
+
+- `gofmt -l .` prints nothing; `go vet ./...` passes.
+- `go test ./...` (also with `-shuffle=on`): 66 tests and 89 subtests pass, none fail or skip; `limits` has 18 tests.
+- `docker compose run --rm test`: passes with the race detector; coverage of `./internal/...` is 100.0%.
+- Two tests failed first on an assertion: `TestLimits_RetriesWithBackoffWhileUnknown` (attempts 60 s apart before the backoff) and `TestLimits_RetriesSaveAfterFailure` (one save attempt, no retry).
+- Four tests passed as soon as they were written, because T04 or the backoff already gave the behaviour they pin; coverage stayed at 100% of `limits`. Each was then run against a deliberately broken copy of the code, reverted afterwards, and failed as it should:
+  - `TestLimits_UnknownUntilFirstSuccess`, with a backoff that keeps going after a value is known: attempts 8, 16 and 30 s apart instead of 60 s;
+  - `TestLimits_KeepsLastValidValueOnFailure` and `TestLimits_KeepsLastValidValueWhenSourceTimesOut`, with a refresh that forgets the value on failure: `MaxActive` gives 0, unknown;
+  - `TestLimits_NeverLogsBody`, with a parsing error that quotes the payload: the token shows in the log.
+- Backoff only while no value is known: with a valid value in use, a failed refresh waits the normal 60 s. The ticket, architecture.md and consistency.md P8 now say so.
+- Remaining for part 2, once reserve (T06), retries (T08) and release (T09) exist: `503 limit_unavailable` with `Retry-After: 5` for new reservations only while no value has ever been obtained, and release, usage, reads and replays working with the limit unknown.
