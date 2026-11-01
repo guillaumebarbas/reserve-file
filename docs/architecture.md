@@ -59,6 +59,7 @@ internal/
 ├── limits/                   MAX_PARALLEL_CHUNKS: fetch, validate, cache, refresh, persist
 └── handler/                  routes, middleware, request/response DTOs, problem+json
 scripts/demo.sh               end-to-end demo: retry, concurrency, release
+api/openapi.yaml              OpenAPI 3.1 description of the API, written by hand from docs/api.md
 ```
 
 `limits` persists its last valid value through a small `Store` interface that it declares itself and that `repository/sqlite` implements (table `settings`).
@@ -167,6 +168,7 @@ The `limits` package, whose `Cache` type holds the value:
 **HTTP server timeouts:** read header 5 s, read 10 s, write 15 s, idle 60 s. The write timeout is longer than SQLite's 5 s busy timeout, so a `503` sent after a lock wait still reaches the client.
 
 **Middleware**, from the outside in:
+- CORS, only when `CORS_ALLOWED_ORIGIN` is set: `app` wraps the handler with `handler.WithCORS`. It answers the preflight of the allowed origin itself, so a preflight gets no request ID and no access log line; the requests that follow get both;
 - request ID: 16 random hexadecimal characters (`crypto/rand`), returned in `X-Request-Id`, stored in the request context and written on every log line of the request;
 - access log: one line per request, with method, path, status and duration;
 - panic recovery, which answers `500 internal_error` and logs the panic with its stack trace. It sits inside the access log, so the log records that `500`.
@@ -183,6 +185,7 @@ The `limits` package, whose `Cache` type holds the value:
 | `ENV_CONFIG_URL` | `https://env.hivenet.com/dev` | Source of `MAX_PARALLEL_CHUNKS` |
 | `ENV_CONFIG_REFRESH` | `60s` | Refresh interval |
 | `ENV_CONFIG_TIMEOUT` | `3s` | Fetch timeout |
+| `CORS_ALLOWED_ORIGIN` | empty: CORS off | The one browser origin allowed to call the API, an origin such as `http://localhost:8081` without a path |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 
 ## Container
@@ -194,9 +197,11 @@ The `limits` package, whose `Cache` type holds the value:
 - **Compose**:
   - `api`: host port `${API_PORT:-8080}` (Windows can reserve port ranges, so a local `.env` may override it), named volume `data`, and `SEED_ACCOUNTS` passed through from the shell or `.env` (left empty, the service seeds its default accounts), as is `ENV_CONFIG_URL`, which defaults to the dev URL;
   - `test`: `golang:1.27` with the source mounted, running `go vet ./...`, `go test -race` with a coverage profile, then `scripts/check-coverage.sh`, which fails below 100%;
-  - `demo`: a curl image running `scripts/demo.sh` against `api`.
+  - `demo`: a curl image running `scripts/demo.sh` against `api`;
+  - `docs`: Swagger UI on host port `${DOCS_PORT:-8081}`, serving `api/openapi.yaml`; "Try it out" needs `CORS_ALLOWED_ORIGIN` set to its origin on `api`, which Compose passes through;
+  - `openapi-lint`: Redocly CLI linting `api/openapi.yaml` with the rules of `api/redocly.yaml`.
 
-  `test` and `demo` sit behind profiles and only run when invoked.
+  `test`, `demo`, `docs` and `openapi-lint` sit behind profiles and only run when invoked.
 
 ## Go conventions
 

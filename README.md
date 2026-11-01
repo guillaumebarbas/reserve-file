@@ -43,8 +43,9 @@ docker compose down -v
 | `ENV_CONFIG_URL` | `https://env.hivenet.com/dev` | Source of `MAX_PARALLEL_CHUNKS`, an absolute http or https URL |
 | `ENV_CONFIG_REFRESH` | `60s` | How often the limit is fetched again |
 | `ENV_CONFIG_TIMEOUT` | `3s` | Timeout of one fetch |
+| `CORS_ALLOWED_ORIGIN` | empty: CORS off | The one browser origin allowed to call the API, such as Swagger UI's `http://localhost:8081` |
 
-Compose passes `SEED_ACCOUNTS` and `ENV_CONFIG_URL` from your shell or `.env`. For example, to lower `small_account` to 50 MiB at the next start, or to read the limit from another environment:
+Compose passes `SEED_ACCOUNTS`, `ENV_CONFIG_URL` and `CORS_ALLOWED_ORIGIN` from your shell or `.env`. For example, to lower `small_account` to 50 MiB at the next start, or to read the limit from another environment:
 
 ```sh
 SEED_ACCOUNTS=large_account:10737418240,small_account:52428800 docker compose up --build
@@ -137,6 +138,16 @@ Every response carries an `X-Request-Id`; `docker compose logs api` shows one li
 | `GET` | `/readyz` | Readiness: the database answers; `limits` tells whether `MAX_PARALLEL_CHUNKS` is known | Yes |
 
 The contract, the error catalogue and the retry rules are in [docs/api.md](docs/api.md).
+
+### API description
+
+[api/openapi.yaml](api/openapi.yaml) describes every endpoint, header, body and error code in OpenAPI 3.1. To browse it and send calls from the page, start the stack with the `docs` profile and allow Swagger UI's origin:
+
+```sh
+CORS_ALLOWED_ORIGIN=http://localhost:8081 docker compose --profile docs up --build
+```
+
+Swagger UI is then at http://localhost:8081: "Try it out" sends the calls to the API on port 8080. If you changed the ports, set `DOCS_PORT` and `API_PORT` in `.env`, use `http://localhost:<DOCS_PORT>` as the allowed origin, and pick `<API_PORT>` in the server list of the page. `docker compose run --rm openapi-lint` checks the file with Redocly.
 
 ## Verify
 
