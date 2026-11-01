@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -219,5 +221,63 @@ func assertUsage(t *testing.T, routes http.Handler, accountID string, wantReserv
 	usage := decodeObject(t, requestUsage(routes, accountID))
 	if usage["reserved_bytes"] != float64(wantReservedBytes) || usage["active_reservations"] != float64(wantActiveReservations) {
 		t.Errorf("usage of %s: got %v bytes reserved and %v active, want %d and %d", accountID, usage["reserved_bytes"], usage["active_reservations"], wantReservedBytes, wantActiveReservations)
+	}
+}
+
+func TestAPI_ListActiveReservations(t *testing.T) {
+	routes := newRoutesWithAccounts(t, map[string]int64{"small_account": 104857600}, fakeLimitProvider{maxActive: 5, known: true})
+	firstID := reserveAndReadID(t, routes, "key_1", 4194304)
+	releasedID := reserveAndReadID(t, routes, "key_2", 2097152)
+	lastID := reserveAndReadID(t, routes, "key_3", 1048576)
+	requestRelease(routes, "small_account", releasedID)
+	want := []string{
+		strings.TrimSpace(requestReservation(routes, "small_account", firstID).Body.String()),
+		strings.TrimSpace(requestReservation(routes, "small_account", lastID).Body.String()),
+	}
+
+	recorder := requestActiveReservations(routes, "small_account")
+
+	if recorder.Code != http.StatusOK || recorder.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("GET /accounts/small_account/reservations: got %d %q %s, want 200 application/json", recorder.Code, recorder.Header().Get("Content-Type"), recorder.Body.String())
+	}
+	var body struct {
+		Reservations []json.RawMessage `json:"reservations"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode body %q: %v", recorder.Body.String(), err)
+	}
+	var got []string
+	for _, reservation := range body.Reservations {
+		got = append(got, string(reservation))
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("active reservations of small_account:\n got  %v\n want %v: the two still active, oldest first, each with the body of a single read", got, want)
+	}
+}
+
+func requestActiveReservations(routes http.Handler, accountID string) *httptest.ResponseRecorder {
+	recorder := httptest.NewRecorder()
+	routes.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/accounts/"+accountID+"/reservations", nil))
+	return recorder
+}
+
+func TestAPI_ListActiveReservationsEmpty(t *testing.T) {
+	routes := newRoutesWithAccounts(t, map[string]int64{"small_account": 104857600}, fakeLimitProvider{maxActive: 5, known: true})
+
+	recorder := requestActiveReservations(routes, "small_account")
+
+	if got := strings.TrimSpace(recorder.Body.String()); recorder.Code != http.StatusOK || got != `{"reservations":[]}` {
+		t.Errorf("GET /accounts/small_account/reservations with nothing reserved: got %d %s, want 200 {\"reservations\":[]}", recorder.Code, got)
+	}
+}
+
+func TestAPI_ListActiveReservationsUnknownAccount(t *testing.T) {
+	routes := newRoutesWithAccounts(t, map[string]int64{"small_account": 104857600}, fakeLimitProvider{maxActive: 5, known: true})
+
+	recorder := requestActiveReservations(routes, "unknown_account")
+
+	body := decodeObject(t, recorder)
+	if recorder.Code != http.StatusNotFound || body["code"] != "account_not_found" {
+		t.Errorf("GET /accounts/unknown_account/reservations: got %d %v, want 404 account_not_found", recorder.Code, body["code"])
 	}
 }

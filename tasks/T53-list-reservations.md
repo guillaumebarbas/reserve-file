@@ -41,9 +41,9 @@ Integration (`internal/repository/sqlite`, `internal/handler`):
 - [x] `TestListActiveReservations_OnlyActiveOldestFirst` — released reservations and those of other accounts are left out; the order follows `created_at`, not the key, the ID or the insertion order.
 - [x] `TestListActiveReservations_DatabaseUnavailable` — a closed database gives `ErrServiceUnavailable` and nothing else to unwrap.
 - [x] `TestListActiveReservations_UnreadableRowFailsTheWholeList` — a row that cannot be read gives `ErrServiceUnavailable`, never a partial list.
-- [ ] `TestAPI_ListActiveReservations` — `200` with the active reservations, oldest first, each with the body of a single read.
-- [ ] `TestAPI_ListActiveReservationsEmpty` — `200` with `{"reservations":[]}`.
-- [ ] `TestAPI_ListActiveReservationsUnknownAccount` — `404 account_not_found`.
+- [x] `TestAPI_ListActiveReservations` — `200` with the active reservations, oldest first, each with the body of a single read.
+- [x] `TestAPI_ListActiveReservationsEmpty` — `200` with `{"reservations":[]}`.
+- [x] `TestAPI_ListActiveReservationsUnknownAccount` — `404 account_not_found`.
 
 ## Test results
 
