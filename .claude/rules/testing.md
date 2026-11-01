@@ -26,7 +26,7 @@ Process: `/implement-task` and the `tdd` skill. Which tests to write: the curren
 ## Structure
 
 - Names: `Test<Unit>_<Behaviour>` (`TestRelease_Twice`). Table tests run each case with `t.Run(tc.name, …)` and a readable case name.
-- Table-driven tests for rules with many cases (`DecideReserve`, input validation, the limits fetcher).
+- Table-driven tests for rules with many cases (`Account.Reserve`, input validation, the limits fetcher). Domain methods are tested directly, without a database.
 - Arrange, act, assert, separated by blank lines. One behaviour per test.
 - Standard library only (`testing`, `net/http/httptest`): no assertion or mocking library.
 - Failure messages say what was expected: `t.Errorf("available bytes: got %d, want %d", got, want)`. Use `t.Fatalf` when the test cannot continue.

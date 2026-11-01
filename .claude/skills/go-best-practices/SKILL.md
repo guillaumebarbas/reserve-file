@@ -74,7 +74,7 @@ The reader is new to Go and must explain the code live. Between two correct opti
 ## Review checklist
 
 1. Does every new interface live in the package that uses it, and does a fake or a second implementation actually use it?
-2. Is every rule that depends on stored state evaluated inside the repository transaction, through the decide function, with no network call inside?
+2. Is every rule that depends on stored state evaluated inside the repository transaction, through the methods of the `Account` aggregate, with no network call inside?
 3. Is each error handled exactly once, and is every ignored error explicit (`_ =`), except the deferred `tx.Rollback()`?
 4. Is no driver or transport error reachable with `%w` from outside `repository/sqlite` or `limits`?
 5. Do successful paths return a literal `nil`, and does every `errors.As` target match the form of the returned error?
