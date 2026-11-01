@@ -158,7 +158,9 @@ Measured before `_txlock=immediate` (T07): in WAL mode the limit was never excee
 
 The guard is a convenience. The `UNIQUE (account_id, idempotency_key)` constraint is what makes a second row impossible. If the constraint ever fires (it cannot with one instance), the request also gets `409 request_in_progress`.
 
-**Proved by.** `TestService_DuplicateInFlightReturnsInProgress`, `TestReserve_ConcurrentSameKeyCreatesOneRow`, `TestReserve_UniqueViolationMapsToInProgress`, `TestAPI_ConcurrentSameKey`.
+The guard is a mutex and a map of `(account_id, idempotency_key)` pairs in `service`, taken before any database access and released with `defer`, so an error or a panic never leaves a key stuck. Release does not go through it.
+
+**Proved by.** `TestService_DuplicateInFlightReturnsInProgress`, `TestService_DifferentKeysAreNotBlocked`, `TestService_SameKeyOnDifferentAccountsIsNotBlocked`, `TestService_GuardReleasedAfterError`, `TestService_GuardReleasedAfterPanic`, `TestReserve_ConcurrentSameKeyCreatesOneRow` (no guard at that layer: the database alone makes one row), `TestReserve_UniqueViolationMapsToInProgress`, `TestAPI_ConcurrentSameKey`.
 
 ### P4 — A key is reused for a different request
 
