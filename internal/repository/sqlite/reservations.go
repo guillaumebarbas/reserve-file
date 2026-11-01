@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/guillaumebarbas/reserve-file/internal/domain"
+	sqlitedriver "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 const (
@@ -85,7 +87,15 @@ func insertReservation(ctx context.Context, transaction *sql.Tx, reservation dom
 	const insert = `INSERT INTO reservations (id, account_id, idempotency_key, bytes, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`
 	_, err := transaction.ExecContext(ctx, insert,
 		reservation.ID, reservation.AccountID, reservation.IdempotencyKey, reservation.Bytes, string(reservation.Status), reservation.CreatedAt.UnixMilli())
+	if isUniqueViolation(err) {
+		return fmt.Errorf("%w: insert reservation with key %s: %v", domain.ErrRequestInProgress, reservation.IdempotencyKey, err)
+	}
 	return translateDriverError("insert reservation", err)
+}
+
+func isUniqueViolation(err error) bool {
+	var driverError *sqlitedriver.Error
+	return errors.As(err, &driverError) && driverError.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
 }
 
 func saveCounters(ctx context.Context, transaction *sql.Tx, account domain.Account) error {
