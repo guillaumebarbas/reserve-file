@@ -10,5 +10,8 @@ coverage.out
 # Local Claude Code settings
 .claude/settings.local.json
 
+# Local Docker Compose overrides, such as API_PORT
+.env
+
 # The exercise brief belongs to Hivenet and is not published
 Backend Developer Homework - Reserve Space for an Upload.md

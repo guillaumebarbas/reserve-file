@@ -161,7 +161,7 @@ The `limits` package:
 
 - **Dockerfile**: stage 1 is `golang:1.27` running `CGO_ENABLED=0 go build -trimpath`; stage 2 is `gcr.io/distroless/static:nonroot` (no shell, runs as UID 65532).
 - **Volume ownership**: `/data` is created in the image and owned by `65532:65532`. Docker copies that ownership into an empty named volume on first mount; without it, the non-root process cannot write the database.
-- **Signals**: `ENTRYPOINT ["/app/api"]` in exec form, so the process is PID 1 and receives SIGTERM directly.
+- **Signals**: `ENTRYPOINT ["/app/api"]` in exec form, so the process is PID 1 and receives SIGTERM directly. Compose waits 15 s (`stop_grace_period`) before killing it, longer than the 10 s shutdown timeout.
 - **Health check**: distroless has no curl, so the binary's `healthcheck` subcommand calls `/healthz`.
 - **Compose**:
   - `api`: host port `${API_PORT:-8080}` (Windows can reserve port ranges, so a local `.env` may override it), named volume `data`;
