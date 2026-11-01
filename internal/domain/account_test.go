@@ -70,6 +70,8 @@ func TestAccount_Reserve(t *testing.T) {
 		{name: "negative_bytes", limitBytes: 100, maxActive: knownLimit, requestedBytes: -5, wantErr: ErrBytesNotPositive},
 		{name: "existing_key_with_the_same_bytes_replays", limitBytes: 100, reservedBytes: 30, activeReservations: 1, existing: &existingReservation, maxActive: knownLimit, requestedBytes: 30, wantOutcome: Replayed, wantReservationID: "existing_reservation", wantReservedBytes: 30, wantActiveReservations: 1},
 		{name: "replay_comes_before_every_admission_rule", limitBytes: 30, reservedBytes: 30, activeReservations: 5, existing: &existingReservation, maxActive: MaxActive{}, requestedBytes: 30, wantOutcome: Replayed, wantReservationID: "existing_reservation", wantReservedBytes: 30, wantActiveReservations: 5},
+		{name: "existing_key_with_other_bytes_is_refused", limitBytes: 100, reservedBytes: 30, activeReservations: 1, existing: &existingReservation, maxActive: knownLimit, requestedBytes: 31, wantErr: IdempotencyKeyReusedError{OriginalBytes: 30}, wantReservedBytes: 30, wantActiveReservations: 1},
+		{name: "key_reuse_comes_before_every_admission_rule", limitBytes: 30, reservedBytes: 30, activeReservations: 5, existing: &existingReservation, maxActive: MaxActive{}, requestedBytes: 50, wantErr: IdempotencyKeyReusedError{OriginalBytes: 30}, wantReservedBytes: 30, wantActiveReservations: 5},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

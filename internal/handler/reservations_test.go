@@ -61,6 +61,27 @@ func TestAPI_ReserveRetry(t *testing.T) {
 	assertUsage(t, routes, "small_account", 31457280, 1)
 }
 
+func TestAPI_KeyReuseWithDifferentBytes(t *testing.T) {
+	routes := newRoutesWithAccounts(t, map[string]int64{"small_account": 104857600}, fakeLimitProvider{maxActive: 5, known: true})
+	first := reserve(routes, "small_account", "key_1", 31457280)
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first attempt: got %d %s, want %d", first.Code, first.Body.String(), http.StatusCreated)
+	}
+
+	reused := reserve(routes, "small_account", "key_1", 32505856)
+
+	if reused.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("same key with 31 MiB after 30 MiB: got %d %s, want %d", reused.Code, reused.Body.String(), http.StatusUnprocessableEntity)
+	}
+	body := decodeObject(t, reused)
+	wantDetail := "This Idempotency-Key was already used to reserve 31457280 bytes. Use a new key for a new request."
+	if body["code"] != "idempotency_key_reused" || body["original_bytes"] != 31457280.0 || body["detail"] != wantDetail {
+		t.Errorf("same key with 31 MiB after 30 MiB: got code %v, original_bytes %v and detail %q, want idempotency_key_reused, 31457280 and %q",
+			body["code"], body["original_bytes"], body["detail"], wantDetail)
+	}
+	assertUsage(t, routes, "small_account", 31457280, 1)
+}
+
 func TestAPI_ReserveRefused(t *testing.T) {
 	testCases := []struct {
 		name           string
