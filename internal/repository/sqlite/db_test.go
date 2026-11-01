@@ -24,15 +24,15 @@ func TestOpen_CreatesSchema(t *testing.T) {
 }
 
 func TestOpen_AppliesPragmas(t *testing.T) {
+	const synchronousFull = "2"
 	store := openStore(t, newDatabasePath(t), nil)
 	want := map[string]string{
 		"busy_timeout": "5000",
 		"journal_mode": "wal",
-		"synchronous":  "2", // FULL
+		"synchronous":  synchronousFull,
 		"foreign_keys": "1",
 	}
 
-	// Two connections held at the same time are two different connections of the pool.
 	connections := []*sql.Conn{holdConnection(t, store), holdConnection(t, store)}
 
 	for i, conn := range connections {
@@ -178,7 +178,6 @@ func newDatabasePath(t *testing.T) string {
 	return filepath.Join(t.TempDir(), "reserve.db")
 }
 
-// openStore opens a store that is closed at the end of the test.
 func openStore(t *testing.T, path string, accounts map[string]int64) *Store {
 	t.Helper()
 	store, err := Open(t.Context(), path, accounts)
@@ -238,8 +237,6 @@ func storedAccounts(t *testing.T, store *Store) []storedAccount {
 	return accounts
 }
 
-// createDatabase creates a database at path with the given statements, without
-// going through Open, as another program would.
 func createDatabase(t *testing.T, path string, statements string) {
 	t.Helper()
 	db, err := sql.Open("sqlite", path)

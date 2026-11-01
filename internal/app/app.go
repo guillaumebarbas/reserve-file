@@ -1,4 +1,3 @@
-// Package app reads the configuration, wires the service together and runs it.
 package app
 
 import (
@@ -18,13 +17,6 @@ import (
 
 const shutdownTimeout = 10 * time.Second
 
-// Run opens the database, starts the service and blocks until ctx is
-// cancelled, then shuts the HTTP server down gracefully and closes the
-// database. It returns an error if the service cannot start, stops on its
-// own, or does not finish its requests in time.
-//
-// With "healthcheck" as first argument, Run instead checks that the instance
-// listening on HTTP_ADDR answers /healthz, and returns an error if it does not.
 func Run(ctx context.Context, args []string, getenv func(string) string, stdout io.Writer) error {
 	config, err := loadConfig(getenv)
 	if err != nil {
@@ -49,8 +41,6 @@ func serve(ctx context.Context, httpAddr string, logger *slog.Logger) error {
 	}
 	server := newServer(handler.New())
 
-	// If Serve stops on its own, cancelling ctx shuts everything down as a
-	// signal would.
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
 	var serveErr error
@@ -76,11 +66,9 @@ func serve(ctx context.Context, httpAddr string, logger *slog.Logger) error {
 }
 
 func healthcheck(httpAddr string) error {
-	// loadConfig has already checked that the address splits into host and port.
 	host, port, _ := net.SplitHostPort(httpAddr)
-	// An address that listens on every interface is reached through loopback:
-	// Docker runs the check inside the container, next to the server.
-	if host == "" || net.ParseIP(host).IsUnspecified() {
+	listensOnEveryInterface := host == "" || net.ParseIP(host).IsUnspecified()
+	if listensOnEveryInterface {
 		host = "127.0.0.1"
 	}
 	client := &http.Client{Timeout: 2 * time.Second}
@@ -101,9 +89,7 @@ func newServer(routes http.Handler) *http.Server {
 		Handler:           routes,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		// Longer than SQLite's 5 s busy timeout, so that a 503 sent after a
-		// lock wait still reaches the client.
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 }

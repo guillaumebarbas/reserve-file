@@ -138,9 +138,6 @@ func TestHealthcheck_ProbesWhereTheServerListens(t *testing.T) {
 	}
 }
 
-// startRun runs Run in the background and waits for its "server started" log
-// line. It returns the address read from that line, a function that cancels
-// Run's context, and a channel that receives Run's result.
 func startRun(t *testing.T, environment map[string]string) (string, context.CancelFunc, <-chan error) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -163,7 +160,6 @@ func startRun(t *testing.T, environment map[string]string) (string, context.Canc
 			t.Fatalf("log line %q is not JSON: %v", logLines.Text(), err)
 		}
 		if record.Msg == "server started" {
-			// Keep reading, so that Run never blocks on its next log lines.
 			go io.Copy(io.Discard, logReader)
 			return record.Addr, cancel, result
 		}
@@ -179,8 +175,6 @@ func runHealthcheck(httpAddr string) error {
 	return Run(ctx, []string{"healthcheck"}, fakeGetenv(environment), io.Discard)
 }
 
-// startServerOn serves the API on host and returns the port it listens on. It
-// skips the test when the machine cannot listen on host.
 func startServerOn(t *testing.T, host string) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))

@@ -8,12 +8,11 @@ import (
 	"strings"
 )
 
-// Config is the service configuration, read from environment variables.
 type Config struct {
 	HTTPAddr     string
 	LogLevel     slog.Level
 	DBPath       string
-	SeedAccounts map[string]int64 // account ID → storage limit in bytes
+	SeedAccounts map[string]int64
 }
 
 func loadConfig(getenv func(string) string) (Config, error) {
@@ -52,7 +51,6 @@ func loadConfig(getenv func(string) string) (Config, error) {
 	return config, nil
 }
 
-// parseSeedAccounts reads a list of id:limit_bytes entries separated by commas.
 func parseSeedAccounts(value string) (map[string]int64, error) {
 	accounts := make(map[string]int64)
 	for _, entry := range strings.Split(value, ",") {
