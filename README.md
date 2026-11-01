@@ -148,7 +148,34 @@ It runs `go vet`, then the unit and integration tests with the race detector, an
 
 Concurrent reservations are proved by tests that start 20 to 50 reservations at the same instant, through the repository and through the HTTP API: only those that fit succeed, and the counters always equal the active reservations (`TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestAPI_ConcurrentReservations`).
 
-A demo script that shows a reservation, a retry, concurrent requests and a release against the running stack comes with [T12](tasks/T12-demo-and-readme.md).
+### Demo
+
+With the stack running (`docker compose up -d`), run the demo against it:
+
+```sh
+docker compose run --rm demo
+```
+
+It uses `small_account` (100 MiB) and prints, for each step, the expected and the actual answer:
+1. usage before anything: nothing reserved;
+2. a reservation of 30 MiB: `201`;
+3. the same request with the same key, as after a lost response: `200`, `Idempotent-Replayed: true`, the same ID, usage unchanged;
+4. 80 MiB while 70 MiB are free: `409 insufficient_storage`;
+5. 20 reservations of 20 MiB sent at the same time: exactly 3 get `201` and 17 get `409`, and the counters match;
+6. the first key reused with 31 MiB: `422 idempotency_key_reused`;
+7. the first reservation released twice: `200` both times, and the space comes back once;
+8. the other reservations released, and usage back to zero.
+
+```text
+5. Send 20 reservations of 20 MiB at the same time, with distinct keys
+   201 Created: expected 3, got 3
+   409 Conflict: expected 17, got 17
+   usage status: expected 200, got 200
+   reserved bytes: expected 94371840, got 94371840
+   active reservations: expected 4, got 4
+```
+
+It stops with a non-zero exit code at the first unexpected answer. Even then it releases what it created, so it can run again. The script is [scripts/demo.sh](scripts/demo.sh): POSIX shell and curl, run in a `curlimages/curl` container.
 
 ## Design
 

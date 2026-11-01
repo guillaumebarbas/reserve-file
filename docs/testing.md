@@ -88,12 +88,13 @@ go test -tags e2e ./e2e/...      # container tests (needs Go and Docker)
 
 ## Demo script
 
-`scripts/demo.sh` runs against the Compose stack (`docker compose up -d`, then `docker compose run --rm demo`) and prints each step. It uses account `small_account`: 100 MiB, with `MAX_PARALLEL_CHUNKS` = 5. It checks that nothing is reserved before it starts and releases what it created at the end, so it can be run again.
+`scripts/demo.sh` runs against the Compose stack (`docker compose up -d`, then `docker compose run --rm demo`) and prints each step with the expected and the actual answer. It uses account `small_account` at its default 100 MiB. It checks that nothing is reserved before it starts, stops with a non-zero exit code at the first unexpected answer, and always releases what it created, so it can be run again. Its keys carry a run identifier, so a new run never replays an earlier one.
 
-1. Show usage before anything.
+1. Show usage before anything: nothing reserved, and `MAX_PARALLEL_CHUNKS` known.
 2. Reserve 30 MiB: `201`.
 3. Send the same request with the same key: `200`, `Idempotent-Replayed: true`, same ID, usage unchanged.
-4. Send the same key with 31 MiB: `422`.
-5. Send 20 parallel reservations of 20 MiB with distinct keys: exactly three `201` and seventeen `409 insufficient_storage`; usage shows 90 MiB reserved and 4 active reservations.
-6. Release the first reservation twice: `200` both times; reserved space drops by 30 MiB once.
-7. Release the remaining reservations: usage is back to zero.
+4. Reserve 80 MiB while 70 MiB are free: `409 insufficient_storage`.
+5. Send 20 reservations of 20 MiB at the same time, with distinct keys: as many `201` as fit, three with `MAX_PARALLEL_CHUNKS` = 5, and `409` for the others; usage shows 90 MiB reserved and 4 active reservations.
+6. Send the first key with 31 MiB: `422 idempotency_key_reused`.
+7. Release the first reservation twice: `200` both times, with the same `released_at`; reserved space drops by 30 MiB once.
+8. Release the remaining reservations: usage is back to zero.
