@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+const (
+	firstRetryDelay = time.Second
+	maxRetryDelay   = 30 * time.Second
+)
+
 type Store interface {
 	LoadMaxParallelChunks(ctx context.Context) (int, bool, error)
 	SaveMaxParallelChunks(ctx context.Context, maxParallelChunks int) error
@@ -24,6 +29,7 @@ type Cache struct {
 	store                  Store
 	logger                 *slog.Logger
 	maxParallelChunks      atomic.Int64
+	savedMaxParallelChunks int
 }
 
 func New(config Config, store Store, logger *slog.Logger) *Cache {
@@ -47,18 +53,23 @@ func (cache *Cache) Init(ctx context.Context) {
 		cache.logger.Warn("saved limit not loaded", "error", err)
 	case found:
 		cache.maxParallelChunks.Store(int64(savedValue))
+		cache.savedMaxParallelChunks = savedValue
 	}
 	cache.refresh(ctx)
 }
 
 func (cache *Cache) Run(ctx context.Context) {
-	refreshTicker := time.NewTicker(cache.refreshInterval)
-	defer refreshTicker.Stop()
+	retryDelay := firstRetryDelay
 	for {
+		delayBeforeNextFetch := cache.refreshInterval
+		if _, known := cache.MaxActive(); !known {
+			delayBeforeNextFetch = retryDelay
+			retryDelay = min(2*retryDelay, maxRetryDelay)
+		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-refreshTicker.C:
+		case <-time.After(delayBeforeNextFetch):
 			cache.refresh(ctx)
 		}
 	}
@@ -71,11 +82,15 @@ func (cache *Cache) refresh(ctx context.Context) {
 		return
 	}
 	previousValue := cache.maxParallelChunks.Swap(int64(maxParallelChunks))
-	if previousValue == int64(maxParallelChunks) {
+	if previousValue != int64(maxParallelChunks) {
+		cache.logger.Info("limit updated", "max_parallel_chunks", maxParallelChunks)
+	}
+	if maxParallelChunks == cache.savedMaxParallelChunks {
 		return
 	}
-	cache.logger.Info("limit updated", "max_parallel_chunks", maxParallelChunks)
 	if err := cache.store.SaveMaxParallelChunks(ctx, maxParallelChunks); err != nil {
 		cache.logger.Warn("limit not saved", "error", err)
+		return
 	}
+	cache.savedMaxParallelChunks = maxParallelChunks
 }
