@@ -1,0 +1,14 @@
+# Build and test output
+/bin/
+coverage.out
+
+# SQLite databases
+*.db
+*.db-wal
+*.db-shm
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# The exercise brief belongs to Hivenet and is not published
+Backend Developer Homework - Reserve Space for an Upload.md
