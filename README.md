@@ -110,7 +110,7 @@ Idempotent-Replayed: true
 {"id":"01a1988c-8e0a-77f2-8afe-1c0d35876fe2","account_id":"small_account","bytes":31457280,"status":"active","created_at":"2026-11-01T19:18:30.666Z","released_at":null}
 ```
 
-A refused attempt stores nothing, so the same key can succeed once there is room.
+A refused attempt stores nothing, so the same key can succeed once there is room. The same key with another size is a client bug: it is refused with `422 idempotency_key_reused` and the original size in `original_bytes`, and nothing is reserved.
 
 Read the reservation back with the `id` from the response, then release it; the space comes back at once:
 
@@ -132,7 +132,7 @@ Every response carries an `X-Request-Id`; `docker compose logs api` shows one li
 | `GET` | `/accounts/{accountID}/usage` | Limit, reserved space and available space | Yes |
 | `POST` | `/accounts/{accountID}/reservations` | Reserve space, with an `Idempotency-Key` | Yes; a retry with the same key is replayed |
 | `GET` | `/accounts/{accountID}/reservations/{reservationID}` | Read a reservation | Yes |
-| `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation | Yes; a second release with T10 |
+| `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation | Yes; repeating it returns the same body and gives the space back once |
 | `GET` | `/healthz` | Liveness | Yes |
 | `GET` | `/readyz` | Readiness: the database answers; `limits` tells whether `MAX_PARALLEL_CHUNKS` is known | Yes |
 
@@ -148,7 +148,34 @@ It runs `go vet`, then the unit and integration tests with the race detector, an
 
 Concurrent reservations are proved by tests that start 20 to 50 reservations at the same instant, through the repository and through the HTTP API: only those that fit succeed, and the counters always equal the active reservations (`TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestAPI_ConcurrentReservations`).
 
-A demo script that shows a reservation, a retry, concurrent requests and a release against the running stack comes with [T12](tasks/T12-demo-and-readme.md).
+### Demo
+
+With the stack running (`docker compose up -d`), run the demo against it:
+
+```sh
+docker compose run --rm demo
+```
+
+It uses `small_account` (100 MiB) and prints, for each step, the expected and the actual answer:
+1. usage before anything: nothing reserved;
+2. a reservation of 30 MiB: `201`;
+3. the same request with the same key, as after a lost response: `200`, `Idempotent-Replayed: true`, the same ID, usage unchanged;
+4. 80 MiB while 70 MiB are free: `409 insufficient_storage`;
+5. 20 reservations of 20 MiB sent at the same time: exactly 3 get `201` and 17 get `409`, and the counters match;
+6. the first key reused with 31 MiB: `422 idempotency_key_reused`;
+7. the first reservation released twice: `200` both times, and the space comes back once;
+8. the other reservations released, and usage back to zero.
+
+```text
+5. Send 20 reservations of 20 MiB at the same time, with distinct keys
+   201 Created: expected 3, got 3
+   409 Conflict: expected 17, got 17
+   usage status: expected 200, got 200
+   reserved bytes: expected 94371840, got 94371840
+   active reservations: expected 4, got 4
+```
+
+It stops with a non-zero exit code at the first unexpected answer. Even then it releases what it created, so it can run again. The script is [scripts/demo.sh](scripts/demo.sh): POSIX shell and curl, run in a `curlimages/curl` container.
 
 ## Design
 
@@ -164,9 +191,9 @@ The reasons, the invariants and the failure handling are in [docs/decisions.md](
 
 Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2).
 
-- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots (T06); concurrent reservations serialized by `BEGIN IMMEDIATE`, so they never exceed the limit or the slots (T07); a retry with the same key replayed instead of reserved twice (T08); reading and releasing a reservation (T09); invalid keys and sizes refused with a precise detail (T13); the limit source retried with a backoff while the limit is unknown (T18, part 1).
+- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots (T06); concurrent reservations serialized by `BEGIN IMMEDIATE`, so they never exceed the limit or the slots (T07); a retry with the same key replayed instead of reserved twice (T08); a known key reused with another size refused with `422` (T14); reading and releasing a reservation (T09); a repeated or concurrent release giving the space back once (T10); invalid keys and sizes refused with a precise detail (T13); the limit source retried with a backoff while the limit is unknown (T18, part 1).
 - **In progress:** this README and the demo (T12).
-- **Not started:** double release and restart (T10, T11), the other edge cases (T14 to T17, T19 to T21, and the end-to-end part of T18), container tests (T22), OpenAPI (T23).
+- **Not started:** restart and shutdown proofs (T11), the other edge cases (T15 to T17, T19 to T21, and the end-to-end part of T18), container tests (T22), OpenAPI (T23).
 
 Time spent so far: T01 35 min, T02 30 min, T03 30 min, then T04 to T09, T13 and part of T18 built in parallel by agents in about 1 h of wall-clock time, after the design and tooling work (docs, tickets, rules, GitHub setup).
 
