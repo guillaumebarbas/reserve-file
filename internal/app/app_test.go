@@ -96,6 +96,31 @@ func TestHealthcheck_HealthyAndUnhealthy(t *testing.T) {
 	}
 }
 
+func TestHealthcheck_ProbesWhereTheServerListens(t *testing.T) {
+	tests := []struct {
+		name       string
+		listenHost string
+		configHost string
+	}{
+		{name: "empty_host", listenHost: "127.0.0.1", configHost: ""},
+		{name: "ipv4_wildcard", listenHost: "127.0.0.1", configHost: "0.0.0.0"},
+		{name: "ipv6_wildcard", listenHost: "127.0.0.1", configHost: "::"},
+		{name: "specific_host", listenHost: "127.0.0.2", configHost: "127.0.0.2"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			port := startServerOn(t, tc.listenHost)
+			httpAddr := net.JoinHostPort(tc.configHost, port)
+
+			err := runHealthcheck(httpAddr)
+
+			if err != nil {
+				t.Errorf("healthcheck with HTTP_ADDR=%s, server on %s: got error %v, want nil", httpAddr, tc.listenHost, err)
+			}
+		})
+	}
+}
+
 // startRun runs Run in the background and waits for its "server started" log
 // line. It returns the address read from that line, a function that cancels
 // Run's context, and a channel that receives Run's result.
@@ -135,6 +160,23 @@ func runHealthcheck(httpAddr string) error {
 	defer cancel()
 	environment := map[string]string{"HTTP_ADDR": httpAddr}
 	return Run(ctx, []string{"healthcheck"}, fakeGetenv(environment), io.Discard)
+}
+
+// startServerOn serves the API on host and returns the port it listens on. It
+// skips the test when the machine cannot listen on host.
+func startServerOn(t *testing.T, host string) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
+	if err != nil {
+		t.Skipf("cannot listen on %s on this machine: %v", host, err)
+	}
+	server := httptest.NewUnstartedServer(handler.New())
+	_ = server.Listener.Close()
+	server.Listener = listener
+	server.Start()
+	t.Cleanup(server.Close)
+	_, port, _ := net.SplitHostPort(listener.Addr().String())
+	return port
 }
 
 func closedAddress(t *testing.T) string {

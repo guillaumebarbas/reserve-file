@@ -70,12 +70,15 @@ func serve(ctx context.Context, httpAddr string, logger *slog.Logger) error {
 
 func healthcheck(httpAddr string) error {
 	// loadConfig has already checked that the address splits into host and port.
-	_, port, _ := net.SplitHostPort(httpAddr)
+	host, port, _ := net.SplitHostPort(httpAddr)
+	// An address that listens on every interface is reached through loopback:
+	// Docker runs the check inside the container, next to the server.
+	if host == "" || net.ParseIP(host).IsUnspecified() {
+		host = "127.0.0.1"
+	}
 	client := &http.Client{Timeout: 2 * time.Second}
 
-	// Docker runs the check inside the container, next to the server, so the
-	// loopback address always reaches it.
-	response, err := client.Get("http://" + net.JoinHostPort("127.0.0.1", port) + "/healthz")
+	response, err := client.Get("http://" + net.JoinHostPort(host, port) + "/healthz")
 	if err != nil {
 		return fmt.Errorf("healthcheck: %w", err)
 	}
