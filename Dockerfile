@@ -1,7 +1,6 @@
 FROM golang:1.27 AS build
 WORKDIR /src
-# go.sum appears with the first dependency; the wildcard keeps this step valid until then.
-COPY go.mod go.sum* ./
+COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -o /out/api ./cmd/api
