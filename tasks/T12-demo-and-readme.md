@@ -15,8 +15,8 @@ What the reviewer reads and runs first. The README answers the four points of th
 
 ## Technical acceptance criteria
 
-- [ ] `scripts/demo.sh` uses only POSIX shell and curl. It runs in a `curlimages/curl` container through the `demo` Compose service, prints each step with the expected and actual status, and exits non-zero at the first mismatch.
-- [ ] The steps are those of testing.md, on `small_account`. The script checks that nothing is reserved before it starts and releases what it created at the end, so it can be run again.
+- [x] `scripts/demo.sh` uses only POSIX shell and curl. It runs in a `curlimages/curl` container through the `demo` Compose service, prints each step with the expected and actual status, and exits non-zero at the first mismatch.
+- [x] The steps are those of testing.md, on `small_account`. The script checks that nothing is reserved before it starts and releases what it created at the end, so it can be run again.
 - [ ] The README covers:
   - how to start the stack (`docker compose up --build`);
   - the database setup: automatic schema and seed at startup, data on the `data` volume, reset with `docker compose down -v`;
@@ -59,3 +59,14 @@ The user is the reviewer, with only Docker.
   - `docker compose run --rm test`: passes with the race detector; coverage of `./internal/...` is 100.0%.
 - `README.md` answers the brief's four points with what exists today: how to run, database setup, configuration, example requests, how to verify, status and time, how AI was used, and links. Its sections on endpoints, verification and status are filled in as the next tickets land.
 - Remaining for this ticket: the demo script and its two runs, the README pass once T04 to T11 are done, every README command run on a fresh clone, and making the repository and the board public at submission.
+
+### Part 2: demo script (2026-11-01)
+
+- `scripts/demo.sh`: POSIX shell and curl only, run by the `demo` Compose service (profile `demo`, `curlimages/curl:8.23.0` pinned by digest, after `api` is healthy). Each step prints the expected and the actual answer; the first mismatch stops the script with exit code 1. A trap on exit releases every reservation the run created, even after a failure, and the keys carry a run identifier, so the demo can always run again.
+- Run on a stack built from this branch (separate Compose project, removed afterwards), with the real limit source (`MAX_PARALLEL_CHUNKS` = 5):
+  - steps 1 to 5 pass: nothing reserved at the start; `201` for 30 MiB; `200` with `Idempotent-Replayed: true` and the same ID on the retry, usage unchanged; `409 insufficient_storage` for 80 MiB with its detail; 20 concurrent requests of 20 MiB give exactly 3 `201` and 17 `409`, and usage shows 90 MiB and 4 active reservations;
+  - step 6 fails as expected on this branch: the same key with 31 MiB is replayed with `200` until T14 refuses it with `422`. The script stops with exit code 1 and releases everything;
+  - a second run passes the same steps, so the clean-up after a failure works;
+  - a temporary copy without step 6 shows the first release at `200` and stops at the second release, which answers `500` until T10;
+  - a temporary copy without the steps that need T10 and T14 passes to the end: the remaining reservations are released and usage is back to zero.
+- Remaining: rerun the whole demo twice once T10 and T14 are merged, the README pass once T04 to T11 are done, every README command on a fresh clone, and the publication at submission.
