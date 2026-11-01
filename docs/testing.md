@@ -64,16 +64,18 @@ workers.Wait()
 assertInvariants(t, database)
 ```
 
-The invariant query must return no rows:
+The invariant query, run by `assertInvariants` in `internal/repository/sqlite`, must return no rows:
 
 ```sql
-SELECT a.id
-FROM accounts a
-LEFT JOIN reservations r ON r.account_id = a.id AND r.status = 'active'
-GROUP BY a.id
-HAVING a.reserved_bytes <> COALESCE(SUM(r.bytes), 0)
-    OR a.active_reservations <> COUNT(r.id);
+SELECT account.id
+FROM accounts account
+LEFT JOIN reservations reservation ON reservation.account_id = account.id AND reservation.status = 'active'
+GROUP BY account.id
+HAVING account.reserved_bytes <> COALESCE(SUM(reservation.bytes), 0)
+    OR account.active_reservations <> COUNT(reservation.id);
 ```
+
+API tests cannot reach the store's connection, so they check the same counters through `GET /accounts/{accountID}/usage` after every request.
 
 ## Running the tests
 
