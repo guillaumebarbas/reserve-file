@@ -165,7 +165,7 @@ The `limits` package:
 - **Health check**: distroless has no curl, so the binary's `healthcheck` subcommand calls `/healthz`.
 - **Compose**:
   - `api`: host port `${API_PORT:-8080}` (Windows can reserve port ranges, so a local `.env` may override it), named volume `data`;
-  - `test`: `golang:1.27` with the source mounted, running `go vet ./... && go test -race ./...`;
+  - `test`: `golang:1.27` with the source mounted, running `go vet ./...`, `go test -race` with a coverage profile, then `scripts/check-coverage.sh`, which fails below 100%;
   - `demo`: a curl image running `scripts/demo.sh` against `api`.
 
   `test` and `demo` sit behind profiles and only run when invoked.
@@ -174,7 +174,7 @@ The `limits` package:
 
 - Small interfaces, declared by the package that uses them.
 - No `Interface` / `Impl` pairs; no `utils`, `models` or `common` packages.
-- Wiring by hand in `main.go`; no dependency-injection framework.
+- Wiring by hand in `internal/app`; no dependency-injection framework.
 - Errors are values: wrapped with `%w` inside the module, inspected with `errors.Is` / `errors.As`. At the boundary with a dependency, the dependency's error is formatted with `%v`. No panics for control flow.
 - `context.Context` is the first parameter of every call that does I/O.
 - `gofmt`, `go vet` and `golangci-lint` report nothing.
