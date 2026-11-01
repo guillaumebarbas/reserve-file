@@ -142,23 +142,45 @@ func TestRelease_FailureMidTransactionWritesNothing(t *testing.T) {
 	}
 }
 
-func TestRelease_SecondReleaseGivesNothingBack(t *testing.T) {
+func TestRelease_Twice(t *testing.T) {
 	store := openStore(t, newDatabasePath(t), map[string]int64{"small_account": 104857600})
 	reserveForTest(t, store, "small_account", "reservation_1", 31457280)
 	reserveForTest(t, store, "small_account", "reservation_2", 31457280)
 	firstReleasedAt := time.Date(2026, 11, 1, 12, 3, 10, 0, time.UTC)
-	if _, err := store.Release(t.Context(), "small_account", "reservation_1", firstReleasedAt); err != nil {
+	firstRelease, err := store.Release(t.Context(), "small_account", "reservation_1", firstReleasedAt)
+	if err != nil {
 		t.Fatalf("first release: %v", err)
 	}
 
-	_, _ = store.Release(t.Context(), "small_account", "reservation_1", firstReleasedAt.Add(time.Minute))
+	secondRelease, err := store.Release(t.Context(), "small_account", "reservation_1", firstReleasedAt.Add(time.Minute))
 
+	if err != nil {
+		t.Fatalf("second release: got error %v, want the unchanged reservation", err)
+	}
+	assertSameReservation(t, secondRelease, firstRelease)
 	wantAccounts := []storedAccount{{id: "small_account", limitBytes: 104857600, reservedBytes: 31457280, activeReservations: 1}}
 	if got := readStoredAccounts(t, store); !slices.Equal(got, wantAccounts) {
 		t.Errorf("accounts after releasing reservation_1 twice: got %+v, want %+v", got, wantAccounts)
 	}
 	if status, releasedAt := readReleaseState(t, store, "reservation_1"); status != "released" || releasedAt.Int64 != firstReleasedAt.UnixMilli() {
 		t.Errorf("reservation_1: got status %q released at %v, want released at %d", status, releasedAt, firstReleasedAt.UnixMilli())
+	}
+	assertInvariants(t, store.database)
+}
+
+func TestRelease_RollsBackWhenTheRowIsNotUpdated(t *testing.T) {
+	store := openStore(t, newDatabasePath(t), map[string]int64{"small_account": 104857600})
+	reserveForTest(t, store, "small_account", "reservation_1", 31457280)
+	execute(t, store, "CREATE TRIGGER skipped_release BEFORE UPDATE ON reservations BEGIN SELECT RAISE(IGNORE); END")
+
+	_, err := store.Release(t.Context(), "small_account", "reservation_1", time.Date(2026, 11, 1, 12, 3, 10, 0, time.UTC))
+
+	if err == nil {
+		t.Fatal("Release when the reservation row is not updated: got nil error, want an error")
+	}
+	wantAccounts := []storedAccount{{id: "small_account", limitBytes: 104857600, reservedBytes: 31457280, activeReservations: 1}}
+	if got := readStoredAccounts(t, store); !slices.Equal(got, wantAccounts) {
+		t.Errorf("accounts: got %+v, want %+v", got, wantAccounts)
 	}
 	assertInvariants(t, store.database)
 }

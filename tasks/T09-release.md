@@ -38,7 +38,7 @@ Unit (`internal/domain`, `internal/service`):
 Integration (`internal/repository/sqlite`, `internal/handler`):
 - [x] `TestRelease_ActiveReservation` — the reservation is stored as released with its `released_at`, and the counters come back to zero.
 - [x] `TestGet_ReturnsCurrentState` — active before the release, released with its `released_at` after.
-- [x] `TestRelease_SecondReleaseGivesNothingBack` *(added)* — the second guard: releasing a reservation already released never gives its space back again, even with another active reservation to hide the error.
+- [x] `TestRelease_SecondReleaseGivesNothingBack` *(added; became `TestRelease_Twice` in T10, and the guard is now tested by `TestRelease_RollsBackWhenTheRowIsNotUpdated`)* — the second guard: releasing a reservation already released never gives its space back again, even with another active reservation to hide the error.
 - [x] `TestRelease_NotFound` *(added)* — an unknown account gives `ErrAccountNotFound`, an unknown reservation `ErrReservationNotFound`; nothing changes.
 - [x] `TestGet_UnknownReservation` *(added)* — `ErrReservationNotFound`.
 - [x] `TestRelease_DatabaseUnavailable` *(added)* — release and read on a closed database give `ErrServiceUnavailable` and nothing else to unwrap.
