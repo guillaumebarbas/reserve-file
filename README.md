@@ -2,7 +2,7 @@
 
 A Go service that reserves storage space for uploads: a client reserves bytes before it uploads, releases them when it no longer needs them, and reads how much space its account has left. Written for the Hivenet backend homework.
 
-**Status: in progress.** The foundations are done; the reservation endpoints are being built. See [Status](#status).
+**Status: complete.** Every ticket of the plan is done, from the core API to the edge cases, container tests and an OpenAPI description. What a production release would still need is listed under [Gaps](#gaps-that-would-block-a-production-release).
 
 ## Run it
 
@@ -19,6 +19,8 @@ If port 8080 is taken, or reserved as Windows does for Hyper-V and WSL, pick ano
 ```sh
 echo API_PORT=18080 > .env
 ```
+
+The examples below use port 8080; with `API_PORT` set, use that port instead.
 
 ### Database
 
@@ -111,7 +113,7 @@ Idempotent-Replayed: true
 {"id":"01a1988c-8e0a-77f2-8afe-1c0d35876fe2","account_id":"small_account","bytes":31457280,"status":"active","created_at":"2026-11-01T19:18:30.666Z","released_at":null}
 ```
 
-A refused attempt stores nothing, so the same key can succeed once there is room. The same key with another size is a client bug: it is refused with `422 idempotency_key_reused` and the original size in `original_bytes`, and nothing is reserved.
+A refused attempt stores nothing, so the same key can succeed once there is room. The same key with another size is a client bug: it is refused with `422 idempotency_key_reused` and the original size in `original_bytes`, and nothing is reserved. A second request with the same key while the first is still being processed gets `409 request_in_progress` with `Retry-After: 1`; its retry then gets the replay.
 
 Read the reservation back with the `id` from the response, then release it; the space comes back at once:
 
@@ -124,18 +126,18 @@ curl -s -X POST http://localhost:8080/accounts/small_account/reservations/01a198
 {"id":"01a1989c-9235-7ec5-a7f2-00e4ce5e968d","account_id":"small_account","bytes":31457280,"status":"released","created_at":"2026-11-01T19:36:00.309Z","released_at":"2026-11-01T19:36:04.649Z"}
 ```
 
-A second release of the same reservation never gives the space back twice; until T10, it answers `500` instead of the same body.
+Releasing it again answers `200` with the same body, `released_at` included, and never gives the space back twice. An unknown reservation, or one that belongs to another account, gets `404 reservation_not_found`.
 
 Every response carries an `X-Request-Id`; `docker compose logs api` shows one line per request with the same ID. Errors are `application/problem+json` with a stable `code`.
 
-| Method | Path | Purpose | Available |
-|---|---|---|---|
-| `GET` | `/accounts/{accountID}/usage` | Limit, reserved space and available space | Yes |
-| `POST` | `/accounts/{accountID}/reservations` | Reserve space, with an `Idempotency-Key` | Yes; a retry with the same key is replayed |
-| `GET` | `/accounts/{accountID}/reservations/{reservationID}` | Read a reservation | Yes |
-| `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation | Yes; repeating it returns the same body and gives the space back once |
-| `GET` | `/healthz` | Liveness | Yes |
-| `GET` | `/readyz` | Readiness: the database answers; `limits` tells whether `MAX_PARALLEL_CHUNKS` is known | Yes |
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/accounts/{accountID}/usage` | Limit, reserved and available space, active reservations and `MAX_PARALLEL_CHUNKS` |
+| `POST` | `/accounts/{accountID}/reservations` | Reserve space, with an `Idempotency-Key`; a retry with the same key is replayed |
+| `GET` | `/accounts/{accountID}/reservations/{reservationID}` | Read a reservation |
+| `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation; repeating it returns the same body |
+| `GET` | `/healthz` | Liveness |
+| `GET` | `/readyz` | Readiness: the database answers; `limits` tells whether `MAX_PARALLEL_CHUNKS` is known |
 
 The contract, the error catalogue and the retry rules are in [docs/api.md](docs/api.md).
 
@@ -217,30 +219,45 @@ A run takes about two minutes, most of it the first image build. The build tag k
 
 ## Design
 
-How reservations work; the endpoints are being built in T05 to T09.
+How reservations stay consistent:
 
-- Each reserve or release is one SQLite write transaction. The account row carries its counters, so admission reads one row, whatever the number of reservations.
-- The client sends an `Idempotency-Key`. It is stored with the reservation, so a retry gets the same reservation instead of a second one.
-- `MAX_PARALLEL_CHUNKS` is fetched from `https://env.hivenet.com/dev` in the background and cached; no request waits for it.
+- Each reserve or release is one SQLite transaction that takes the write lock at `BEGIN` (`BEGIN IMMEDIATE`), so concurrent requests queue and each one sees the state the previous one left. The account row carries its counters, so admission reads one row, whatever the number of reservations.
+- The client sends an `Idempotency-Key`. It is stored with the reservation and looked up before every admission rule, so a retry gets the same reservation, even after a release or while the account is full. The same key still in progress gets `409`; the same key with another size gets `422`.
+- A release moves a reservation from active to released once; repeating it changes nothing.
+- `MAX_PARALLEL_CHUNKS` is fetched from `https://env.hivenet.com/dev` at startup and in the background, cached and saved; no request waits for it. When the source is down, the last value is kept. Before any value is known, new reservations get `503 limit_unavailable`, while release, usage, reads and replays keep working.
+- Lowering a limit below current usage revokes nothing: new reservations are refused until releases bring usage back under it.
+- A database failure answers `503 service_unavailable` with `Retry-After: 1` and leaves nothing half-written, so a retry with the same key is safe.
 
 The reasons, the invariants and the failure handling are in [docs/decisions.md](docs/decisions.md), [docs/consistency.md](docs/consistency.md) and [docs/architecture.md](docs/architecture.md).
 
 ## Status
 
-Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2).
+Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2), with its acceptance criteria, its tests and their results. All 23 are done: the core API and its persistence (T01 to T11), the edge cases (T13 to T21), the container tests (T22), this README and the demo (T12), and the OpenAPI description (T23).
 
-- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots (T06); concurrent reservations serialized by `BEGIN IMMEDIATE`, so they never exceed the limit or the slots (T07); a retry with the same key replayed instead of reserved twice (T08); a known key reused with another size refused with `422` (T14); reading and releasing a reservation (T09); a repeated or concurrent release giving the space back once (T10); the state surviving a restart, and the requests in progress finishing before the database closes (T11); invalid keys and sizes refused with a precise detail (T13); the limit source retried with a backoff while the limit is unknown (T18, part 1).
-- **In progress:** this README and the demo (T12).
-- **Not started:** the other edge cases (T15 to T17, T19 to T21, and the end-to-end part of T18), container tests (T22), OpenAPI (T23).
+### Time spent
 
-Time spent so far: T01 35 min, T02 30 min, T03 30 min, then T04 to T09, T13 and part of T18 built in parallel by agents in about 1 h of wall-clock time, after the design and tooling work (docs, tickets, rules, GitHub setup).
+- Before the first ticket, the design and the tooling: docs, decisions, tickets, project rules, GitHub setup.
+- T01 to T03, one ticket at a time: about 1 h 35 min.
+- T04 to T23, built in parallel by agents and reviewed one at a time: about 1 h 45 min of wall-clock time.
+
+### Gaps that would block a production release
+
+The single-instance MVP the brief asks for is complete; a production release would still need:
+- reservation expiry, so a client that crashes does not hold its space and slot forever;
+- a retention window for released reservations and idempotency keys, which are kept forever today;
+- several instances: PostgreSQL instead of a local SQLite file, since the in-flight guard is per process;
+- authentication, so the account comes from the caller's identity instead of the path;
+- rate limiting, metrics and tracing;
+- backups of the database.
+
+Each one, with its impact and the direction to take: [docs/consistency.md](docs/consistency.md#gaps-that-would-block-a-production-release).
 
 ## How AI was used
 
 - Claude Code wrote the design docs, the tickets, the project rules and the code, test first.
 - I directed the work: I made the decisions, validated the plans and asked for changes, such as the rich `Account` aggregate, descriptive names and no code comments.
 - Every ticket goes through a pull request, and the review is published on it.
-- From the limit source on, independent tickets are built in parallel by Claude Code agents in separate git worktrees; a Claude Code session reviews their pull requests on GitHub and merges them.
+- From the limit source on, independent tickets were built in parallel by Claude Code agents in separate git worktrees; a Claude Code session reviewed their pull requests on GitHub and merged them.
 - I can explain and modify every part of the code.
 
 ## Repository
