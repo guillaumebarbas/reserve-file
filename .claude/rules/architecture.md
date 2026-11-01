@@ -30,6 +30,12 @@ Full description: `docs/architecture.md`.
 | Call to env.hivenet.com and validation of its payload | `limits` |
 | Configuration, construction of the components, server lifecycle | `app` |
 
+## Folders and files
+
+- A folder is a package, not a namespace as in Java: its unexported names are invisible to every other folder. So no sub-folder per category (`domain/errors/`, `handler/middleware/`): it would hide the aggregate's private counters from its own rules, force exporting what is shared (`writeError`, `requestIDFrom`), and an `errors` package would clash with the standard library's.
+- Inside a package, one file per concept, named after it: `domain/account.go`, `domain/errors.go`, `handler/middleware.go`, `handler/errors.go`, `handler/json.go`, `handler/reservations.go`. Its tests sit next to it in `<file>_test.go`.
+- A new package only for a new responsibility with its own API and dependencies, as `repository/sqlite` and `limits` are.
+
 ## Domain model: objects, the Go way
 
 Decision [D20](../../docs/decisions.md#d20--a-rich-account-aggregate-with-private-counters).
