@@ -125,7 +125,7 @@ curl -s http://localhost:8080/accounts/large_account/usage
 | Endpoint | `200` when | Body |
 |---|---|---|
 | `/healthz` | The process serves HTTP | `{"status":"ok"}` |
-| `/readyz` | The database answers a ping | `{"database":"ok","limits":"ok"}`, where `limits` is `"unavailable"` while `MAX_PARALLEL_CHUNKS` is unknown. `limits` comes with the limit source (T04). |
+| `/readyz` | The database answers a ping | `{"database":"ok","limits":"ok"}`, where `limits` is `"unavailable"` while `MAX_PARALLEL_CHUNKS` is unknown |
 
 An unknown limit does not fail readiness, because release, usage and replays still work. `/readyz` returns `503` only when the database does not answer, with `"database":"unavailable"` in the same body; the cause goes to the log with the request ID.
 
