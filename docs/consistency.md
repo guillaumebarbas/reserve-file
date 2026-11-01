@@ -172,9 +172,9 @@ The guard is a convenience. The `UNIQUE (account_id, idempotency_key)` constrain
 
 **Problem.** When the retry arrives, the account may be full, all slots may be taken (possibly by this very reservation), the limit source may be down, or the reservation may already be released.
 
-**Solution.** The idempotency lookup comes before every other check, so all these retries return the original reservation. A released reservation is returned as released and never created again.
+**Solution.** The idempotency lookup comes before every other check, so all these retries return the original reservation. A released reservation is returned as released, with its `released_at`, and never created again. The reserve transaction still reads the account row, which must exist, and the service still reads the cached `MAX_PARALLEL_CHUNKS`, but the answer to a known key is decided before any limit, slot or space rule uses them.
 
-**Proved by.** `TestAccount_Reserve` (replay cases).
+**Proved by.** `TestAccount_Reserve` (replay cases), `TestReserve_ReplayOfReleasedReservation`, `TestReserve_ReplayWhenAccountFull`, `TestReserve_ReplayWhenEverySlotIsUsed`, `TestReserve_ReplayWhenLimitUnknown`, `TestAPI_ReplayOfReleasedReservation`, `TestAPI_ReplayWhenAccountFull`, `TestAPI_ReplayWhenLimitUnknown`.
 
 ### P6 — Double release and concurrent releases
 
