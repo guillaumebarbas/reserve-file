@@ -3,14 +3,11 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/guillaumebarbas/reserve-file/internal/domain"
 )
-
-const selectReservation = `SELECT idempotency_key, bytes, status, created_at, released_at FROM reservations WHERE id = ? AND account_id = ?`
 
 func (store *Store) Release(ctx context.Context, accountID, reservationID string, releasedAt time.Time) (domain.Reservation, error) {
 	transaction, err := store.database.BeginTx(ctx, nil)
@@ -22,7 +19,7 @@ func (store *Store) Release(ctx context.Context, accountID, reservationID string
 	if err != nil {
 		return domain.Reservation{}, err
 	}
-	reservation, err := scanReservation(accountID, reservationID, transaction.QueryRowContext(ctx, selectReservation, reservationID, accountID))
+	reservation, err := scanReservation(transaction.QueryRowContext(ctx, selectReservation, reservationID, accountID))
 	if err != nil {
 		return domain.Reservation{}, err
 	}
@@ -37,32 +34,7 @@ func (store *Store) Release(ctx context.Context, accountID, reservationID string
 }
 
 func (store *Store) Reservation(ctx context.Context, accountID, reservationID string) (domain.Reservation, error) {
-	return scanReservation(accountID, reservationID, store.database.QueryRowContext(ctx, selectReservation, reservationID, accountID))
-}
-
-func scanReservation(accountID, reservationID string, row *sql.Row) (domain.Reservation, error) {
-	var idempotencyKey, status string
-	var bytes, createdAt int64
-	var releasedAt sql.NullInt64
-	err := row.Scan(&idempotencyKey, &bytes, &status, &createdAt, &releasedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return domain.Reservation{}, domain.ErrReservationNotFound
-	}
-	if err != nil {
-		return domain.Reservation{}, translateDriverError("read reservation "+reservationID, err)
-	}
-	reservation := domain.Reservation{
-		ID:             reservationID,
-		AccountID:      accountID,
-		IdempotencyKey: idempotencyKey,
-		Bytes:          bytes,
-		Status:         domain.ReservationStatus(status),
-		CreatedAt:      time.UnixMilli(createdAt).UTC(),
-	}
-	if releasedAt.Valid {
-		reservation.ReleasedAt = time.UnixMilli(releasedAt.Int64).UTC()
-	}
-	return reservation, nil
+	return scanReservation(store.database.QueryRowContext(ctx, selectReservation, reservationID, accountID))
 }
 
 func saveReleasedReservation(ctx context.Context, transaction *sql.Tx, reservation domain.Reservation) error {

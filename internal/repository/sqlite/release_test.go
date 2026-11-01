@@ -166,7 +166,7 @@ func TestRelease_SecondReleaseGivesNothingBack(t *testing.T) {
 func reserveForTest(t *testing.T, store *Store, accountID, reservationID string, bytes int64) domain.Reservation {
 	t.Helper()
 	candidate := newCandidate(accountID, reservationID, "key_"+reservationID, bytes)
-	if err := store.Reserve(t.Context(), candidate, domain.MaxActive{Value: 5, Known: true}); err != nil {
+	if _, _, err := store.Reserve(t.Context(), candidate, domain.MaxActive{Value: 5, Known: true}); err != nil {
 		t.Fatalf("reserve %s: %v", reservationID, err)
 	}
 	return candidate

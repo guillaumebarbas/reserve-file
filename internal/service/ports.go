@@ -9,7 +9,7 @@ import (
 
 type AccountRepository interface {
 	Account(ctx context.Context, accountID string) (domain.Account, error)
-	Reserve(ctx context.Context, candidate domain.Reservation, maxActive domain.MaxActive) error
+	Reserve(ctx context.Context, candidate domain.Reservation, maxActive domain.MaxActive) (domain.Reservation, domain.Outcome, error)
 	Release(ctx context.Context, accountID, reservationID string, releasedAt time.Time) (domain.Reservation, error)
 	Reservation(ctx context.Context, accountID, reservationID string) (domain.Reservation, error)
 }

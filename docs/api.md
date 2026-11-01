@@ -49,7 +49,7 @@ Content-Type: application/json
 |---|---|
 | `bytes` | Required. A JSON integer between 1 and 2⁶³−1. Decimals (`5.5`, `5.0`), exponents and strings are rejected. |
 
-Unknown fields and trailing data are rejected. The body is limited to 4 KiB.
+Unknown fields and trailing data are rejected. The body is limited to 4 KiB. A refused `bytes` gets a `detail` that shows the value received, for example "bytes must be a positive integer, got 5.5." or "bytes must be a positive integer of at most 9223372036854775807, got 9223372036854775808.".
 
 **Errors:** `400 invalid_request`, `400 invalid_idempotency_key`, `404 account_not_found`, `409 request_in_progress`, `409 too_many_active_reservations`, `409 insufficient_storage`, `413 request_too_large`, `422 idempotency_key_reused`, `503 limit_unavailable`, `503 service_unavailable`.
 

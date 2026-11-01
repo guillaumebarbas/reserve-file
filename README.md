@@ -100,7 +100,17 @@ A request that does not fit is refused with its numbers, and nothing is reserved
 {"type":"https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#insufficient_storage","title":"Insufficient storage","status":409,"code":"insufficient_storage","detail":"Requested 80.00 MiB but only 70.00 MiB is available (limit 100.00 MiB). Release a reservation or request less space.","requested_bytes":83886080,"available_bytes":73400320,"limit_bytes":104857600,"request_id":"4fd5a3fcc5666c6f"}
 ```
 
-Retrying with the same key returns `503` until the replay lands with T08.
+A retry with the same key and size gets the same reservation back, with `200` and `Idempotent-Replayed: true`; nothing is reserved twice and no second slot is used:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+Idempotent-Replayed: true
+
+{"id":"01a1988c-8e0a-77f2-8afe-1c0d35876fe2","account_id":"small_account","bytes":31457280,"status":"active","created_at":"2026-11-01T19:18:30.666Z","released_at":null}
+```
+
+A refused attempt stores nothing, so the same key can succeed once there is room.
 
 Read the reservation back with the `id` from the response, then release it; the space comes back at once:
 
@@ -120,7 +130,7 @@ Every response carries an `X-Request-Id`; `docker compose logs api` shows one li
 | Method | Path | Purpose | Available |
 |---|---|---|---|
 | `GET` | `/accounts/{accountID}/usage` | Limit, reserved space and available space | Yes |
-| `POST` | `/accounts/{accountID}/reservations` | Reserve space, with an `Idempotency-Key` | Yes; retries with T08 |
+| `POST` | `/accounts/{accountID}/reservations` | Reserve space, with an `Idempotency-Key` | Yes; a retry with the same key is replayed |
 | `GET` | `/accounts/{accountID}/reservations/{reservationID}` | Read a reservation | Yes |
 | `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation | Yes; a second release with T10 |
 | `GET` | `/healthz` | Liveness | Yes |
@@ -135,6 +145,8 @@ docker compose run --rm test
 ```
 
 It runs `go vet`, then the unit and integration tests with the race detector, and fails below 100% statement coverage of `internal/`. Each database test uses its own SQLite file. What each kind of test covers, and how failures are simulated: [docs/testing.md](docs/testing.md).
+
+Concurrent reservations are proved by tests that start 20 to 50 reservations at the same instant, through the repository and through the HTTP API: only those that fit succeed, and the counters always equal the active reservations (`TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestAPI_ConcurrentReservations`).
 
 A demo script that shows a reservation, a retry, concurrent requests and a release against the running stack comes with [T12](tasks/T12-demo-and-readme.md).
 
@@ -152,11 +164,11 @@ The reasons, the invariants and the failure handling are in [docs/decisions.md](
 
 Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2).
 
-- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots, one request at a time (T06); reading and releasing a reservation (T09).
+- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots (T06); concurrent reservations serialized by `BEGIN IMMEDIATE`, so they never exceed the limit or the slots (T07); a retry with the same key replayed instead of reserved twice (T08); reading and releasing a reservation (T09); invalid keys and sizes refused with a precise detail (T13); the limit source retried with a backoff while the limit is unknown (T18, part 1).
 - **In progress:** this README and the demo (T12).
-- **Not started:** concurrency, retries, double release and restart (T07, T08, T10, T11), the other edge cases (T13 to T21), container tests (T22), OpenAPI (T23).
+- **Not started:** double release and restart (T10, T11), the other edge cases (T14 to T17, T19 to T21, and the end-to-end part of T18), container tests (T22), OpenAPI (T23).
 
-Time spent so far: T01 35 min, T02 30 min, T03 30 min, then T04 and T05 in parallel in about 20 min, after the design and tooling work (docs, tickets, rules, GitHub setup).
+Time spent so far: T01 35 min, T02 30 min, T03 30 min, then T04 to T09, T13 and part of T18 built in parallel by agents in about 1 h of wall-clock time, after the design and tooling work (docs, tickets, rules, GitHub setup).
 
 ## How AI was used
 

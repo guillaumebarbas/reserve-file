@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"fmt"
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -9,7 +9,7 @@ import (
 )
 
 type reserveRequestBody struct {
-	Bytes *int64 `json:"bytes"`
+	Bytes json.RawMessage `json:"bytes"`
 }
 
 type reservationBody struct {
@@ -27,9 +27,14 @@ func (handlers *apiHandlers) reserve(writer http.ResponseWriter, request *http.R
 		handlers.writeError(writer, request, err)
 		return
 	}
-	reservation, err := handlers.storage.Reserve(request.Context(), request.PathValue("accountID"), idempotencyKey, bytes)
+	reservation, outcome, err := handlers.storage.Reserve(request.Context(), request.PathValue("accountID"), idempotencyKey, bytes)
 	if err != nil {
 		handlers.writeError(writer, request, err)
+		return
+	}
+	if outcome == domain.Replayed {
+		writer.Header().Set("Idempotent-Replayed", "true")
+		handlers.writeJSON(request.Context(), writer, http.StatusOK, jsonContentType, newReservationBody(reservation))
 		return
 	}
 	writer.Header().Set("Location", "/accounts/"+reservation.AccountID+"/reservations/"+reservation.ID)
@@ -38,20 +43,18 @@ func (handlers *apiHandlers) reserve(writer http.ResponseWriter, request *http.R
 
 func readReserveRequest(writer http.ResponseWriter, request *http.Request) (string, int64, error) {
 	idempotencyKey := request.Header.Get("Idempotency-Key")
-	if idempotencyKey == "" {
-		return "", 0, invalidIdempotencyKey("The Idempotency-Key header is required. Generate one key per logical request and reuse it on every retry.")
+	if err := validateIdempotencyKey(idempotencyKey); err != nil {
+		return "", 0, err
 	}
 	var body reserveRequestBody
 	if err := decodeJSON(writer, request, &body); err != nil {
 		return "", 0, err
 	}
-	if body.Bytes == nil {
-		return "", 0, invalidRequest("bytes is required: the number of bytes to reserve, as a positive integer.")
+	bytes, err := parseBytes(body.Bytes)
+	if err != nil {
+		return "", 0, err
 	}
-	if *body.Bytes <= 0 {
-		return "", 0, invalidRequest(fmt.Sprintf("bytes must be a positive integer, got %d.", *body.Bytes))
-	}
-	return idempotencyKey, *body.Bytes, nil
+	return idempotencyKey, bytes, nil
 }
 
 func newReservationBody(reservation domain.Reservation) reservationBody {

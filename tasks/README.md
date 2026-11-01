@@ -18,13 +18,13 @@ One ticket per step: the foundations, each feature, and each edge case or small 
 | [T04](T04-external-limit.md) | External limit: fetch, cache and refresh | Foundation | P0 | 25 min | T02, T03 | [#4](https://github.com/guillaumebarbas/reserve-file/issues/4) | `feat/t04-external-limit` | 20 min |
 | [T05](T05-usage.md) | Account usage | Feature | P0 | 15 min | T04 | [#5](https://github.com/guillaumebarbas/reserve-file/issues/5) | `feat/t05-usage` | 20 min |
 | [T06](T06-reserve.md) | Reserve storage | Feature | P0 | 30 min | T05 | [#6](https://github.com/guillaumebarbas/reserve-file/issues/6) | `feat/t06-reserve` | 30 min |
-| [T07](T07-concurrent-reservations.md) | Concurrent reservations never exceed the limits | Case | P0 | 20 min | T06 | [#7](https://github.com/guillaumebarbas/reserve-file/issues/7) | `feat/t07-concurrent-reservations` | |
-| [T08](T08-retry-after-lost-response.md) | Retry after a lost response | Case | P0 | 20 min | T06 | [#8](https://github.com/guillaumebarbas/reserve-file/issues/8) | `feat/t08-retry-after-lost-response` | |
-| [T09](T09-release.md) | Release and read a reservation | Feature | P0 | 20 min | T06 | [#9](https://github.com/guillaumebarbas/reserve-file/issues/9) | `feat/t09-release` | |
+| [T07](T07-concurrent-reservations.md) | Concurrent reservations never exceed the limits | Case | P0 | 20 min | T06 | [#7](https://github.com/guillaumebarbas/reserve-file/issues/7) | `feat/t07-concurrent-reservations` | 7 min |
+| [T08](T08-retry-after-lost-response.md) | Retry after a lost response | Case | P0 | 20 min | T06 | [#8](https://github.com/guillaumebarbas/reserve-file/issues/8) | `feat/t08-retry-after-lost-response` | 20 min |
+| [T09](T09-release.md) | Release and read a reservation | Feature | P0 | 20 min | T06 | [#9](https://github.com/guillaumebarbas/reserve-file/issues/9) | `feat/t09-release` | 25 min |
 | [T10](T10-double-release.md) | Double and concurrent release | Case | P0 | 15 min | T09 | [#10](https://github.com/guillaumebarbas/reserve-file/issues/10) | `feat/t10-double-release` | |
 | [T11](T11-restart-and-shutdown.md) | Restart and graceful shutdown | Case | P0 | 15 min | T09 | [#11](https://github.com/guillaumebarbas/reserve-file/issues/11) | `feat/t11-restart-and-shutdown` | |
 | [T12](T12-demo-and-readme.md) | Demo script and README | Delivery | P0 | 25 min | T01 to T11 | [#12](https://github.com/guillaumebarbas/reserve-file/issues/12) | `chore/t12-demo-and-readme` | |
-| [T13](T13-invalid-input.md) | Invalid input | Case | P1 | 15 min | T06 | [#13](https://github.com/guillaumebarbas/reserve-file/issues/13) | `feat/t13-invalid-input` | |
+| [T13](T13-invalid-input.md) | Invalid input | Case | P1 | 15 min | T06 | [#13](https://github.com/guillaumebarbas/reserve-file/issues/13) | `feat/t13-invalid-input` | 15 min |
 | [T14](T14-key-reuse.md) | Same key, different size | Case | P1 | 10 min | T08 | [#14](https://github.com/guillaumebarbas/reserve-file/issues/14) | `feat/t14-key-reuse` | |
 | [T15](T15-duplicate-in-flight.md) | Same request twice at the same time | Case | P1 | 25 min | T08 | [#15](https://github.com/guillaumebarbas/reserve-file/issues/15) | `feat/t15-duplicate-in-flight` | |
 | [T16](T16-retry-after-change.md) | Retry after the situation changed | Case | P1 | 15 min | T08, T09 | [#16](https://github.com/guillaumebarbas/reserve-file/issues/16) | `feat/t16-retry-after-change` | |

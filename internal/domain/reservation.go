@@ -19,6 +19,13 @@ type Reservation struct {
 	ReleasedAt     time.Time
 }
 
+type Outcome int
+
+const (
+	Created Outcome = iota + 1
+	Replayed
+)
+
 type MaxActive struct {
 	Value int
 	Known bool

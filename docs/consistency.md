@@ -81,10 +81,10 @@ CREATE TABLE settings (
 | `foreign_keys` | `ON` | Off by default in SQLite |
 
 ```
-file:/data/reserve.db?_txlock=immediate&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)
+/data/reserve.db?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=foreign_keys(1)
 ```
 
-With `modernc.org/sqlite`, `_pragma` values are applied to every connection the pool opens.
+With `modernc.org/sqlite`, `_pragma` values are applied to every connection the pool opens. `_txlock` is a driver option, not a pragma: every `BeginTx` then sends `BEGIN IMMEDIATE`, while a read-only transaction still sends a plain `BEGIN`.
 
 ## Reserve transaction
 
@@ -138,15 +138,17 @@ The space comes back only on a real `active → released` transition, so a secon
 
 Concurrent requests with different keys are not refused for being concurrent: parallel chunks and multiple devices are the normal case. They are processed one after the other, each against the real state.
 
-**Proved by.** `TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestReserveRelease_ConcurrentMix`.
+Measured before `_txlock=immediate` (T07): in WAL mode the limit was never exceeded, because a transaction that read an older snapshot cannot write. But 7 to 19 of 50 concurrent requests failed to upgrade their read lock to a write lock, with `SQLITE_BUSY`, and got `503` instead of their real answer: `busy_timeout` cannot help a transaction whose snapshot is stale. With `BEGIN IMMEDIATE`, each request waits for the lock, then reads the state left by the previous one.
+
+**Proved by.** `TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestAPI_ConcurrentReservations`, `TestReserveRelease_ConcurrentMix`.
 
 ### P2 — The response is lost and the client retries
 
 **Problem.** The reservation was committed but the client never got the response (timeout, network cut, crash after commit). A naive retry reserves the space twice and takes a second slot.
 
-**Solution.** The retry carries the same `Idempotency-Key`. Step 1 finds the reservation and returns it with `200` and `Idempotent-Replayed: true`: no extra bytes, no extra slot.
+**Solution.** The retry carries the same `Idempotency-Key`. The key lookup (step 2) finds the reservation and returns it in its current state, with `200` and `Idempotent-Replayed: true`: no extra bytes, no extra slot. A refused or failed attempt stores nothing, so its retry is evaluated again.
 
-**Proved by.** `TestReserve_RetryReturnsSameReservation`, `TestAPI_ReserveRetry`.
+**Proved by.** `TestAccount_Reserve`, `TestReserve_RetryReturnsSameReservation`, `TestReserve_RefusedAttemptIsNotRemembered`, `TestAPI_ReserveRetry`.
 
 ### P3 — The same request arrives twice at the same time
 
@@ -247,14 +249,16 @@ On SIGTERM, the server stops accepting connections, finishes in-flight requests 
 
 | Input | Response |
 |---|---|
-| `bytes` missing, `0`, negative, decimal, a string, or above 2⁶³−1 | `400 invalid_request` |
+| `bytes` missing, `null`, `0`, negative, decimal, an exponent, a string, or above 2⁶³−1 | `400 invalid_request`, with a `detail` showing the value received |
 | Unknown JSON field, or trailing data after the object | `400 invalid_request` |
 | Body over 4 KiB | `413 request_too_large` |
-| `Idempotency-Key` missing, empty, over 255 characters, or non-printable | `400 invalid_idempotency_key` |
+| `Idempotency-Key` missing, empty, over 255 characters, or with a character outside visible ASCII (`0x21` to `0x7E`: no space, no tab, no accented letter) | `400 invalid_idempotency_key`, with a `detail` naming the rule |
 | Unknown account or reservation | `404` |
 | `bytes` above the account's entire limit | `409 insufficient_storage` |
 
-**Proved by.** `TestAPI_ReserveValidation`, `TestAccount_Reserve`.
+Every check runs in the handler, before the service is called, so an invalid request never reaches the database: its key stays unused.
+
+**Proved by.** `TestAPI_ReserveValidation`, `TestAPI_ReserveStoresNothingForAnInvalidRequest`, `TestValidateIdempotencyKey_RejectsInvalidKeys`, `TestReadReserveRequest_RejectsInvalidBytes`, `TestAccount_Reserve`.
 
 ### P14 — MAX_PARALLEL_CHUNKS becomes very large
 
@@ -265,6 +269,8 @@ On SIGTERM, the server stops accepting connections, finishes in-flight requests 
 ### P15 — The client generates a new key for each retry
 
 The service cannot prevent this, because it cannot tell such a retry from a new request of the same size. The API contract tells clients to generate the key once per logical request ([api.md](api.md#idempotency)).
+
+**Proved by.** `TestReserve_DifferentKeysCreateDifferentReservations`: two keys give two reservations, as the contract says.
 
 ## Gaps that would block a production release
 

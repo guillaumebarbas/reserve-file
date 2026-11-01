@@ -39,6 +39,28 @@ func TestAPI_ReserveCreated(t *testing.T) {
 	assertUsage(t, routes, "small_account", 31457280, 1)
 }
 
+func TestAPI_ReserveRetry(t *testing.T) {
+	routes := newRoutesWithAccounts(t, map[string]int64{"small_account": 104857600}, fakeLimitProvider{maxActive: 5, known: true})
+	first := reserve(routes, "small_account", "key_1", 31457280)
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first attempt: got %d %s, want %d", first.Code, first.Body.String(), http.StatusCreated)
+	}
+	firstBody := decodeObject(t, first)
+
+	for attempt := 1; attempt <= 10; attempt++ {
+		retry := reserve(routes, "small_account", "key_1", 31457280)
+
+		if retry.Code != http.StatusOK || retry.Header().Get("Idempotent-Replayed") != "true" {
+			t.Errorf("retry %d: got %d with Idempotent-Replayed %q, want %d with \"true\"", attempt, retry.Code, retry.Header().Get("Idempotent-Replayed"), http.StatusOK)
+		}
+		if body := decodeObject(t, retry); !maps.Equal(body, firstBody) {
+			t.Errorf("retry %d body:\n got  %v\n want the first reservation %v", attempt, body, firstBody)
+		}
+	}
+
+	assertUsage(t, routes, "small_account", 31457280, 1)
+}
+
 func TestAPI_ReserveRefused(t *testing.T) {
 	testCases := []struct {
 		name           string
