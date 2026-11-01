@@ -1,13 +1,16 @@
 package sqlite
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/guillaumebarbas/reserve-file/internal/domain"
+	sqlitedriver "modernc.org/sqlite"
 )
 
 func TestReserve_CreatesAndUpdatesCounters(t *testing.T) {
@@ -379,4 +382,35 @@ func TestListActiveReservations_UnreadableRowFailsTheWholeList(t *testing.T) {
 	if reservations != nil {
 		t.Errorf("ListActiveReservations with an unreadable second row: got %+v, want no reservations, not the first one alone", reservations)
 	}
+}
+
+func TestListActiveReservations_ErrorOnTheSecondRowFailsTheWholeList(t *testing.T) {
+	failingFunctionName := registerFunctionFailingOnReservation(t, "reservation_2")
+	store := openStore(t, newDatabasePath(t), map[string]int64{"small_account": 104857600})
+	reserveForTest(t, store, "small_account", "reservation_1", 1048576)
+	reserveForTest(t, store, "small_account", "reservation_2", 2097152)
+	execute(t, store, "ALTER TABLE reservations RENAME TO stored_reservations")
+	execute(t, store, "CREATE VIEW reservations AS SELECT id, account_id, "+failingFunctionName+"(id, idempotency_key) AS idempotency_key, bytes, status, created_at, released_at FROM stored_reservations")
+
+	reservations, err := store.ListActiveReservations(t.Context(), "small_account")
+
+	assertOnlyServiceUnavailable(t, "ListActiveReservations when the second row raises an error", err)
+	if reservations != nil {
+		t.Errorf("ListActiveReservations when the second row raises an error: got %+v, want no reservations, not the first one alone", reservations)
+	}
+}
+
+func registerFunctionFailingOnReservation(t *testing.T, failingReservationID string) string {
+	t.Helper()
+	functionName := "fail_on_reservation_" + rand.Text()
+	err := sqlitedriver.RegisterScalarFunction(functionName, 2, func(functionContext *sqlitedriver.FunctionContext, arguments []driver.Value) (driver.Value, error) {
+		if arguments[0] == failingReservationID {
+			return nil, errors.New("injected failure")
+		}
+		return arguments[1], nil
+	})
+	if err != nil {
+		t.Fatalf("register the SQL function %s: %v", functionName, err)
+	}
+	return functionName
 }
