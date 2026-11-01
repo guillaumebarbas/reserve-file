@@ -49,6 +49,24 @@ func TestAPI_GetReservation(t *testing.T) {
 	assertUsage(t, routes, "small_account", 31457280, 1)
 }
 
+func TestAPI_ReleaseIdempotent(t *testing.T) {
+	routes := newRoutesWithAccounts(t, map[string]int64{"small_account": 104857600}, fakeLimitProvider{maxActive: 5, known: true})
+	created := decodeObject(t, reserve(routes, "small_account", "key_1", 31457280))
+	reserve(routes, "small_account", "key_2", 31457280)
+	reservationID, _ := created["id"].(string)
+
+	firstRelease := requestRelease(routes, "small_account", reservationID)
+	secondRelease := requestRelease(routes, "small_account", reservationID)
+
+	if firstRelease.Code != http.StatusOK || secondRelease.Code != http.StatusOK {
+		t.Fatalf("two releases of %s: got %d then %d %s, want 200 twice", reservationID, firstRelease.Code, secondRelease.Code, secondRelease.Body.String())
+	}
+	if firstBody, secondBody := decodeObject(t, firstRelease), decodeObject(t, secondRelease); !maps.Equal(secondBody, firstBody) {
+		t.Errorf("second release body:\n got  %v\n want the first one %v", secondBody, firstBody)
+	}
+	assertUsage(t, routes, "small_account", 31457280, 1)
+}
+
 func TestAPI_ReservationNotFound(t *testing.T) {
 	testCases := []struct {
 		name       string
