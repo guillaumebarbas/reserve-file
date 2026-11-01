@@ -17,46 +17,46 @@ import (
 
 const shutdownTimeout = 10 * time.Second
 
-func Run(ctx context.Context, args []string, getenv func(string) string, stdout io.Writer) error {
-	config, err := loadConfig(getenv)
+func Run(ctx context.Context, arguments []string, getEnvironmentVariable func(string) string, logOutput io.Writer) error {
+	config, err := loadConfig(getEnvironmentVariable)
 	if err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}
-	if len(args) > 0 && args[0] == "healthcheck" {
-		return healthcheck(config.HTTPAddr)
+	if len(arguments) > 0 && arguments[0] == "healthcheck" {
+		return checkHealth(config.HTTPAddress)
 	}
-	logger := slog.New(slog.NewJSONHandler(stdout, &slog.HandlerOptions{Level: config.LogLevel}))
-	store, err := sqlite.Open(ctx, config.DBPath, config.SeedAccounts)
+	logger := slog.New(slog.NewJSONHandler(logOutput, &slog.HandlerOptions{Level: config.LogLevel}))
+	store, err := sqlite.Open(ctx, config.DatabasePath, config.SeedAccounts)
 	if err != nil {
 		return err
 	}
-	serveErr := serve(ctx, config.HTTPAddr, logger)
+	serveErr := serveUntilCancelled(ctx, config.HTTPAddress, logger)
 	return errors.Join(serveErr, store.Close())
 }
 
-func serve(ctx context.Context, httpAddr string, logger *slog.Logger) error {
-	listener, err := net.Listen("tcp", httpAddr)
+func serveUntilCancelled(ctx context.Context, httpAddress string, logger *slog.Logger) error {
+	listener, err := net.Listen("tcp", httpAddress)
 	if err != nil {
-		return fmt.Errorf("listen on %s: %w", httpAddr, err)
+		return fmt.Errorf("listen on %s: %w", httpAddress, err)
 	}
-	server := newServer(handler.New())
+	server := newHTTPServer(handler.New())
 
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
 	var serveErr error
-	var wg sync.WaitGroup
-	wg.Go(func() {
+	var serving sync.WaitGroup
+	serving.Go(func() {
 		serveErr = server.Serve(listener)
 		stop()
 	})
-	logger.Info("server started", "addr", listener.Addr().String())
+	logger.Info("server started", "address", listener.Addr().String())
 
 	<-ctx.Done()
 	logger.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	shutdownErr := server.Shutdown(shutdownCtx)
-	wg.Wait()
+	serving.Wait()
 	logger.Info("server stopped")
 
 	if errors.Is(serveErr, http.ErrServerClosed) {
@@ -65,8 +65,8 @@ func serve(ctx context.Context, httpAddr string, logger *slog.Logger) error {
 	return errors.Join(serveErr, shutdownErr)
 }
 
-func healthcheck(httpAddr string) error {
-	host, port, _ := net.SplitHostPort(httpAddr)
+func checkHealth(httpAddress string) error {
+	host, port, _ := net.SplitHostPort(httpAddress)
 	listensOnEveryInterface := host == "" || net.ParseIP(host).IsUnspecified()
 	if listensOnEveryInterface {
 		host = "127.0.0.1"
@@ -84,7 +84,7 @@ func healthcheck(httpAddr string) error {
 	return nil
 }
 
-func newServer(routes http.Handler) *http.Server {
+func newHTTPServer(routes http.Handler) *http.Server {
 	return &http.Server{
 		Handler:           routes,
 		ReadHeaderTimeout: 5 * time.Second,

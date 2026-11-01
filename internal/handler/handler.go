@@ -3,13 +3,13 @@ package handler
 import "net/http"
 
 func New() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", healthz)
-	return mux
+	routes := http.NewServeMux()
+	routes.HandleFunc("GET /healthz", reportLiveness)
+	return routes
 }
 
-func healthz(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
+func reportLiveness(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(http.StatusOK)
+	_, _ = writer.Write([]byte(`{"status":"ok"}`))
 }

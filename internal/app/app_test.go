@@ -19,10 +19,10 @@ import (
 const deadlineIfRunHangs = 5 * time.Second
 
 func TestRun_ServesUntilContextCancelled(t *testing.T) {
-	addr, stop, result := startRun(t, map[string]string{"HTTP_ADDR": "127.0.0.1:0", "DB_PATH": newDatabasePath(t)})
+	address, stop, result := startRunInBackground(t, map[string]string{"HTTP_ADDR": "127.0.0.1:0", "DB_PATH": newDatabasePath(t)})
 	client := &http.Client{Timeout: 5 * time.Second}
 
-	response, err := client.Get("http://" + addr + "/healthz")
+	response, err := client.Get("http://" + address + "/healthz")
 	if err != nil {
 		t.Fatalf("GET /healthz: %v", err)
 	}
@@ -39,22 +39,22 @@ func TestRun_ServesUntilContextCancelled(t *testing.T) {
 }
 
 func TestRun_FailsWhenAddressInUse(t *testing.T) {
-	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	occupiedListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	defer occupied.Close()
-	addr := occupied.Addr().String()
+	defer occupiedListener.Close()
+	address := occupiedListener.Addr().String()
 	ctx, cancel := context.WithTimeout(context.Background(), deadlineIfRunHangs)
 	defer cancel()
 
-	err = Run(ctx, nil, fakeGetenv(map[string]string{"HTTP_ADDR": addr, "DB_PATH": newDatabasePath(t)}), io.Discard)
+	err = Run(ctx, nil, fakeEnvironment(map[string]string{"HTTP_ADDR": address, "DB_PATH": newDatabasePath(t)}), io.Discard)
 
 	if err == nil {
-		t.Fatalf("Run on %s, already in use: got nil error, want an error", addr)
+		t.Fatalf("Run on %s, already in use: got nil error, want an error", address)
 	}
-	if !strings.Contains(err.Error(), addr) {
-		t.Errorf("Run on %s, already in use: error %q does not name the address", addr, err)
+	if !strings.Contains(err.Error(), address) {
+		t.Errorf("Run on %s, already in use: error %q does not name the address", address, err)
 	}
 }
 
@@ -63,7 +63,7 @@ func TestRun_FailsOnInvalidConfiguration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), deadlineIfRunHangs)
 	defer cancel()
 
-	err := Run(ctx, nil, fakeGetenv(environment), io.Discard)
+	err := Run(ctx, nil, fakeEnvironment(environment), io.Discard)
 
 	if err == nil {
 		t.Fatalf("Run with %v: got nil error, want a configuration error", environment)
@@ -79,7 +79,7 @@ func TestRun_FailsWhenDatabaseCannotOpen(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), deadlineIfRunHangs)
 	defer cancel()
 
-	err := Run(ctx, nil, fakeGetenv(environment), io.Discard)
+	err := Run(ctx, nil, fakeEnvironment(environment), io.Discard)
 
 	if err == nil {
 		t.Fatalf("Run with DB_PATH=%s, a directory: got nil error, want an error", directory)
@@ -90,17 +90,17 @@ func TestRun_FailsWhenDatabaseCannotOpen(t *testing.T) {
 }
 
 func TestHealthcheck_HealthyAndUnhealthy(t *testing.T) {
-	healthy := httptest.NewServer(handler.New())
-	defer healthy.Close()
-	failing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
+	healthyServer := httptest.NewServer(handler.New())
+	defer healthyServer.Close()
+	failingServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusServiceUnavailable)
 	}))
-	defer failing.Close()
-	closed := closedAddress(t)
+	defer failingServer.Close()
+	noServerAddress := unusedAddress(t)
 
-	healthyErr := runHealthcheck(healthy.Listener.Addr().String())
-	failingErr := runHealthcheck(failing.Listener.Addr().String())
-	closedErr := runHealthcheck(closed)
+	healthyErr := runHealthCheckCommand(healthyServer.Listener.Addr().String())
+	failingErr := runHealthCheckCommand(failingServer.Listener.Addr().String())
+	noServerErr := runHealthCheckCommand(noServerAddress)
 
 	if healthyErr != nil {
 		t.Errorf("healthcheck against a healthy server: got error %v, want nil", healthyErr)
@@ -108,13 +108,13 @@ func TestHealthcheck_HealthyAndUnhealthy(t *testing.T) {
 	if failingErr == nil {
 		t.Error("healthcheck against a server answering 503: got nil error, want an error")
 	}
-	if closedErr == nil {
+	if noServerErr == nil {
 		t.Error("healthcheck against a closed port: got nil error, want an error")
 	}
 }
 
 func TestHealthcheck_ProbesWhereTheServerListens(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name       string
 		listenHost string
 		configHost string
@@ -124,58 +124,58 @@ func TestHealthcheck_ProbesWhereTheServerListens(t *testing.T) {
 		{name: "ipv6_wildcard", listenHost: "127.0.0.1", configHost: "::"},
 		{name: "specific_host", listenHost: "127.0.0.2", configHost: "127.0.0.2"},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			port := startServerOn(t, tc.listenHost)
-			httpAddr := net.JoinHostPort(tc.configHost, port)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			port := startServerOnHost(t, testCase.listenHost)
+			httpAddress := net.JoinHostPort(testCase.configHost, port)
 
-			err := runHealthcheck(httpAddr)
+			err := runHealthCheckCommand(httpAddress)
 
 			if err != nil {
-				t.Errorf("healthcheck with HTTP_ADDR=%s, server on %s: got error %v, want nil", httpAddr, tc.listenHost, err)
+				t.Errorf("healthcheck with HTTP_ADDR=%s, server on %s: got error %v, want nil", httpAddress, testCase.listenHost, err)
 			}
 		})
 	}
 }
 
-func startRun(t *testing.T, environment map[string]string) (string, context.CancelFunc, <-chan error) {
+func startRunInBackground(t *testing.T, environment map[string]string) (string, context.CancelFunc, <-chan error) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	logReader, logWriter := io.Pipe()
 	result := make(chan error, 1)
 	go func() {
-		err := Run(ctx, nil, fakeGetenv(environment), logWriter)
+		err := Run(ctx, nil, fakeEnvironment(environment), logWriter)
 		_ = logWriter.Close()
 		result <- err
 	}()
 
 	logLines := bufio.NewScanner(logReader)
 	for logLines.Scan() {
-		var record struct {
-			Msg  string `json:"msg"`
-			Addr string `json:"addr"`
+		var logRecord struct {
+			Message string `json:"msg"`
+			Address string `json:"address"`
 		}
-		if err := json.Unmarshal(logLines.Bytes(), &record); err != nil {
+		if err := json.Unmarshal(logLines.Bytes(), &logRecord); err != nil {
 			t.Fatalf("log line %q is not JSON: %v", logLines.Text(), err)
 		}
-		if record.Msg == "server started" {
+		if logRecord.Message == "server started" {
 			go io.Copy(io.Discard, logReader)
-			return record.Addr, cancel, result
+			return logRecord.Address, cancel, result
 		}
 	}
 	t.Fatalf("Run stopped before logging %q: %v", "server started", <-result)
 	return "", nil, nil
 }
 
-func runHealthcheck(httpAddr string) error {
+func runHealthCheckCommand(httpAddress string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), deadlineIfRunHangs)
 	defer cancel()
-	environment := map[string]string{"HTTP_ADDR": httpAddr}
-	return Run(ctx, []string{"healthcheck"}, fakeGetenv(environment), io.Discard)
+	environment := map[string]string{"HTTP_ADDR": httpAddress}
+	return Run(ctx, []string{"healthcheck"}, fakeEnvironment(environment), io.Discard)
 }
 
-func startServerOn(t *testing.T, host string) string {
+func startServerOnHost(t *testing.T, host string) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
 	if err != nil {
@@ -195,13 +195,13 @@ func newDatabasePath(t *testing.T) string {
 	return filepath.Join(t.TempDir(), "reserve.db")
 }
 
-func closedAddress(t *testing.T) string {
+func unusedAddress(t *testing.T) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	addr := listener.Addr().String()
+	address := listener.Addr().String()
 	_ = listener.Close()
-	return addr
+	return address
 }
