@@ -7,8 +7,9 @@ coverage.out
 *.db-wal
 *.db-shm
 
-# Local Claude Code settings
+# Local Claude Code settings, and the worktrees of parallel agents
 .claude/settings.local.json
+.claude/worktrees/
 
 # Local Docker Compose overrides, such as API_PORT
 .env
