@@ -20,7 +20,7 @@ import (
 const deadlineIfRunHangs = 5 * time.Second
 
 func TestRun_ServesUntilContextCancelled(t *testing.T) {
-	address, stop, result := startRunInBackground(t, map[string]string{"HTTP_ADDR": "127.0.0.1:0", "DB_PATH": newDatabasePath(t)})
+	address, stop, result := startRunInBackground(t, map[string]string{"HTTP_ADDR": "127.0.0.1:0", "DB_PATH": newDatabasePath(t), "ENV_CONFIG_URL": unreachableLimitSource(t)})
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	response, err := client.Get("http://" + address + "/healthz")
@@ -40,7 +40,7 @@ func TestRun_ServesUntilContextCancelled(t *testing.T) {
 }
 
 func TestRun_ServesAccountUsage(t *testing.T) {
-	address, stop, result := startRunInBackground(t, map[string]string{"HTTP_ADDR": "127.0.0.1:0", "DB_PATH": newDatabasePath(t)})
+	address, stop, result := startRunInBackground(t, map[string]string{"HTTP_ADDR": "127.0.0.1:0", "DB_PATH": newDatabasePath(t), "ENV_CONFIG_URL": unreachableLimitSource(t)})
 	defer func() {
 		stop()
 		<-result
@@ -79,7 +79,7 @@ func TestRun_FailsWhenAddressInUse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), deadlineIfRunHangs)
 	defer cancel()
 
-	err = Run(ctx, nil, fakeEnvironment(map[string]string{"HTTP_ADDR": address, "DB_PATH": newDatabasePath(t)}), io.Discard)
+	err = Run(ctx, nil, fakeEnvironment(map[string]string{"HTTP_ADDR": address, "DB_PATH": newDatabasePath(t), "ENV_CONFIG_URL": unreachableLimitSource(t)}), io.Discard)
 
 	if err == nil {
 		t.Fatalf("Run on %s, already in use: got nil error, want an error", address)
@@ -120,8 +120,33 @@ func TestRun_FailsWhenDatabaseCannotOpen(t *testing.T) {
 	}
 }
 
+func TestRun_FetchesLimitAtStartup(t *testing.T) {
+	limitSource := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_, _ = writer.Write([]byte(`{"MAX_PARALLEL_CHUNKS": 5}`))
+	}))
+	defer limitSource.Close()
+	address, stop, result := startRunInBackground(t, map[string]string{"HTTP_ADDR": "127.0.0.1:0", "DB_PATH": newDatabasePath(t), "ENV_CONFIG_URL": limitSource.URL})
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	response, err := client.Get("http://" + address + "/readyz")
+	if err != nil {
+		t.Fatalf("GET /readyz: %v", err)
+	}
+	body, _ := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	stop()
+	runErr := <-result
+
+	if response.StatusCode != http.StatusOK || strings.TrimSpace(string(body)) != `{"database":"ok","limits":"ok"}` {
+		t.Errorf("GET /readyz after a start with the limit source up: got %d %s, want 200 {\"database\":\"ok\",\"limits\":\"ok\"}", response.StatusCode, body)
+	}
+	if runErr != nil {
+		t.Errorf("Run after cancellation: got error %v, want nil", runErr)
+	}
+}
+
 func TestHealthcheck_HealthyAndUnhealthy(t *testing.T) {
-	healthyServer := httptest.NewServer(handler.New(slog.New(slog.DiscardHandler), nil, nil))
+	healthyServer := httptest.NewServer(handler.New(slog.New(slog.DiscardHandler), nil, nil, nil))
 	defer healthyServer.Close()
 	failingServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusServiceUnavailable)
@@ -212,7 +237,7 @@ func startServerOnHost(t *testing.T, host string) string {
 	if err != nil {
 		t.Skipf("cannot listen on %s on this machine: %v", host, err)
 	}
-	server := httptest.NewUnstartedServer(handler.New(slog.New(slog.DiscardHandler), nil, nil))
+	server := httptest.NewUnstartedServer(handler.New(slog.New(slog.DiscardHandler), nil, nil, nil))
 	_ = server.Listener.Close()
 	server.Listener = listener
 	server.Start()
@@ -224,6 +249,11 @@ func startServerOnHost(t *testing.T, host string) string {
 func newDatabasePath(t *testing.T) string {
 	t.Helper()
 	return filepath.Join(t.TempDir(), "reserve.db")
+}
+
+func unreachableLimitSource(t *testing.T) string {
+	t.Helper()
+	return "http://" + unusedAddress(t) + "/dev"
 }
 
 func unusedAddress(t *testing.T) string {

@@ -25,7 +25,7 @@ The reader is new to Go and must explain the code live. Between two correct opti
 **Errors**
 - A sentinel goes first: `fmt.Errorf("%w: begin reserve: %v", domain.ErrServiceUnavailable, err)`. Otherwise `%w` goes last.
 - Messages name the action that failed, never "failed to", "unable to" or "couldn't", and do not repeat the inner error.
-- Never drop an error silently: write `_ = f()` when it is deliberate. The deferred `transaction.Rollback()` is the one documented exception.
+- Never drop an error silently: write `_ = f()` when it is deliberate. The documented exceptions are the deferred cleanups whose error cannot change the outcome: `transaction.Rollback()`, `rows.Close()` and `response.Body.Close()`.
 - Return a literal `nil` on success, never a nil pointer of an error type: stored in an `error`, it is not equal to `nil`.
 - Decide once whether each error type is returned as a pointer or a value, and use the same form as the `errors.As` target.
 
@@ -76,7 +76,7 @@ The reader is new to Go and must explain the code live. Between two correct opti
 
 1. Does every new interface live in the package that uses it, and does a fake or a second implementation actually use it?
 2. Is every rule that depends on stored state evaluated inside the repository transaction, through the methods of the `Account` aggregate, with no network call inside?
-3. Is each error handled exactly once, and is every ignored error explicit (`_ =`), except the deferred `transaction.Rollback()`?
+3. Is each error handled exactly once, and is every ignored error explicit (`_ =`), except the deferred `transaction.Rollback()`, `rows.Close()` and `response.Body.Close()`?
 4. Is no driver or transport error reachable with `%w` from outside `repository/sqlite` or `limits`?
 5. Do successful paths return a literal `nil`, and does every `errors.As` target match the form of the returned error?
 6. Does every `writeError` or `http.Error` call return immediately?

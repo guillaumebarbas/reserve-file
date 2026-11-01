@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/guillaumebarbas/reserve-file/internal/handler"
+	"github.com/guillaumebarbas/reserve-file/internal/limits"
 	"github.com/guillaumebarbas/reserve-file/internal/repository/sqlite"
 	"github.com/guillaumebarbas/reserve-file/internal/service"
 )
@@ -31,8 +32,15 @@ func Run(ctx context.Context, arguments []string, getEnvironmentVariable func(st
 	if err != nil {
 		return err
 	}
-	routes := handler.New(logger, store, service.New(store, limitNotLoadedYet{}))
+	limitCache := limits.New(config.LimitSource, store, logger)
+	limitCache.Init(ctx)
+	refresherCtx, stopRefresher := context.WithCancel(ctx)
+	var refreshing sync.WaitGroup
+	refreshing.Go(func() { limitCache.Run(refresherCtx) })
+	routes := handler.New(logger, store, limitCache, service.New(store, limitCache))
 	serveErr := serveUntilCancelled(ctx, config.HTTPAddress, routes, logger)
+	stopRefresher()
+	refreshing.Wait()
 	return errors.Join(serveErr, store.Close())
 }
 

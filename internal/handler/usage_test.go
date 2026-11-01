@@ -76,7 +76,7 @@ func newRoutesWithLargeAccount(t *testing.T, limitProvider fakeLimitProvider) ht
 		t.Fatalf("open the database: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	return New(slog.New(slog.DiscardHandler), store, service.New(store, limitProvider))
+	return New(slog.New(slog.DiscardHandler), store, limitProvider, service.New(store, limitProvider))
 }
 
 func requestUsage(routes http.Handler, accountID string) *httptest.ResponseRecorder {
@@ -92,13 +92,4 @@ func decodeObject(t *testing.T, recorder *httptest.ResponseRecorder) map[string]
 		t.Fatalf("decode body %q: %v", recorder.Body.String(), err)
 	}
 	return object
-}
-
-type fakeLimitProvider struct {
-	maxActive int
-	known     bool
-}
-
-func (provider fakeLimitProvider) MaxActive() (int, bool) {
-	return provider.maxActive, provider.known
 }

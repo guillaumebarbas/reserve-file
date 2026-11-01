@@ -27,7 +27,7 @@ What the reviewer reads and runs first. The README answers the four points of th
   - how AI was used;
   - links to `docs/` and `tasks/`.
 - [ ] Every command in the README has been run on a fresh clone.
-- [ ] The base images (`golang`, `gcr.io/distroless/static`) are pinned by digest in the `Dockerfile` and `compose.yaml`, so the reviewer builds exactly what was tested. Raised in the review of #25.
+- [x] The base images (`golang`, `gcr.io/distroless/static`) are pinned by digest in the `Dockerfile` and `compose.yaml`, so the reviewer builds exactly what was tested. Raised in the review of #25.
 - [ ] At submission, the repository and the project board are made public: `gh repo edit guillaumebarbas/reserve-file --visibility public --accept-visibility-change-consequences` and `gh project edit 2 --owner guillaumebarbas --visibility PUBLIC`.
 - [ ] The README is updated after every ticket done later.
 
@@ -47,4 +47,15 @@ The user is the reviewer, with only Docker.
 
 ## Test results
 
-_Not run yet._
+### Part 1: README and pinned images (2026-11-01)
+
+- The base images are pinned by the digest of their multi-platform index, tag kept for readability: `golang:1.27@sha256:2920bb12…` (the image the tests already ran on) and `gcr.io/distroless/static:nonroot@sha256:25ac8f0c…`.
+- With the pinned images, on a separate Compose project with its own volumes, removed afterwards:
+  - `docker compose up --build`: the container becomes `healthy` in `docker compose ps`;
+  - `curl -i` on `/healthz` and `/readyz`: `200` with `X-Request-Id`, and matching lines in `docker compose logs api`;
+  - `docker compose down -v` empties the database;
+  - `SEED_ACCOUNTS=… docker compose up` and a `compose.override.yaml` setting `LOG_LEVEL` are both taken into account;
+  - `API_PORT` in `.env` changes the published port;
+  - `docker compose run --rm test`: passes with the race detector; coverage of `./internal/...` is 100.0%.
+- `README.md` answers the brief's four points with what exists today: how to run, database setup, configuration, example requests, how to verify, status and time, how AI was used, and links. Its sections on endpoints, verification and status are filled in as the next tickets land.
+- Remaining for this ticket: the demo script and its two runs, the README pass once T04 to T11 are done, every README command run on a fresh clone, and making the repository and the board public at submission.
