@@ -225,17 +225,22 @@ The payload contains analytics tokens and is never logged.
 
 | When | Outcome |
 |---|---|
+| A statement fails during a transaction | The deferred `Rollback` undoes every statement before it; a retry with the same key then reserves or releases exactly once |
 | During a transaction | SQLite discards it when the file is next opened |
 | After `COMMIT`, before the response | The client retries with the same key and gets a replay (P2) |
 | Power loss after a `201` | `synchronous=FULL`: the commit is on disk |
 
-**Proved by.** `TestRepository_ReopenKeepsState`, `TestContainer_SigkillKeepsCommittedReservations` and the P2 tests. Atomic commit is SQLite's own guarantee and is not re-tested.
+Every statement of the reserve transaction (account read, key lookup, insert, counter update) and of the release transaction (account read, reservation read, reservation update, counter update) is made to fail in turn: none leaves a row without its counters, nor the reverse. A failing `COMMIT` cannot be injected deterministically (no deferred constraint, and in WAL mode a commit does not wait for readers); a context cancelled just before it covers that point instead (P11).
+
+**Proved by.** `TestReserve_RetryAfterAFailedStatementCreatesOnce`, `TestRelease_RetryAfterAFailedStatementReleasesOnce`, `TestReserve_FailureMidTransactionWritesNothing`, `TestRelease_FailureMidTransactionWritesNothing`, `TestReserve_KeyLookupFailureWritesNothing`, `TestRepository_ReopenKeepsState`, `TestContainer_SigkillKeepsCommittedReservations` and the P2 tests. Atomic commit is SQLite's own guarantee and is not re-tested.
 
 ### P11 — The client disconnects mid-request
 
 The request context is cancelled. The transaction either commits or rolls back; it never half-applies. The client cannot tell which, so it retries with the same key and gets either a replay or a fresh execution. There is no duplicate in either case.
 
-**Proved by.** `TestReserve_CancelledContextRollsBack`.
+`database/sql` watches the context of each transaction: once it is cancelled, the next statement refuses to run (the statement in progress may also be interrupted), `Commit` returns the context error instead of committing, and the transaction is rolled back. So a disconnect before the commit always rolls back, wherever it happens, and the store answers `ErrServiceUnavailable`, which the client never sees since it is gone. The tests cancel the context from inside the transaction, through a trigger that calls a SQL function registered by the test: after the insert, after the reservation update, and after the counter update, just before the commit.
+
+**Proved by.** `TestReserve_CancelledContextRollsBack`, `TestRelease_CancelledContextRollsBack`.
 
 ### P12 — Restart and shutdown
 
