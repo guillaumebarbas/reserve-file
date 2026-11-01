@@ -39,8 +39,8 @@ Unit and integration tests live next to the code they test and run together. Why
 | Database gone | `db.Close()` before the call |
 | Read-only database | The file opened with `mode=ro` |
 | Disk full | `PRAGMA max_page_count` lowered by the test, so the next write fails with `SQLITE_FULL` |
-| A statement fails mid-transaction | A trigger created by the test: `CREATE TRIGGER … BEGIN SELECT RAISE(ABORT, 'injected'); END` |
-| Client disconnects | The context cancelled during the transaction |
+| A statement fails mid-transaction | A trigger created by the test: `CREATE TRIGGER … BEGIN SELECT RAISE(ABORT, 'injected'); END`. A read fails when the test renames its table (`ALTER TABLE accounts RENAME TO hidden_accounts`), then renames it back to check the state and retry |
+| Client disconnects | The context cancelled between two statements of the transaction: a trigger calls a SQL function the test registers with the driver (`sqlite.RegisterScalarFunction`), and that function cancels the context. No sleep, and always at the same point |
 | Crash or restart | Close and reopen the store on the same file; in container tests, `docker compose restart` and `docker compose kill -s SIGKILL` |
 | Limit source down, slow or wrong | `httptest.Server` returning 500, sleeping past the timeout, or serving invalid payloads |
 | Client gone while the response is written | A `ResponseWriter` whose `Write` fails |
