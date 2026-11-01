@@ -41,6 +41,7 @@ Unit and integration tests live next to the code they test and run together. Why
 | Disk full | `PRAGMA max_page_count` set to the current page count on the store's only connection. A reservation whose key spills over several pages then needs new pages to be written or rewritten, and fails with `SQLITE_FULL` |
 | Database refusing writes, then recovering, through the API | A trigger created by a second connection aborts every insert, then is dropped |
 | A statement fails mid-transaction | A trigger created by the test: `CREATE TRIGGER … BEGIN SELECT RAISE(ABORT, 'injected'); END`. A read fails when the test renames its table (`ALTER TABLE accounts RENAME TO hidden_accounts`), then renames it back to check the state and retry |
+| A row that cannot be read, or an error on one row | The test renames `reservations` and creates a view with the same name. For one row, the view returns `NULL` in a `NOT NULL` column, so scanning it fails, or calls a SQL function registered by the test that returns an error |
 | Client disconnects | The context cancelled between two statements of the transaction: a trigger calls a SQL function the test registers with the driver (`sqlite.RegisterScalarFunction`), and that function cancels the context. No sleep, and always at the same point |
 | Crash or restart | Close and reopen the store on the same file; in container tests, `docker compose restart` and `docker compose kill -s SIGKILL` |
 | Limit source down, slow or wrong | `httptest.Server` returning 500, sleeping past the timeout, or serving invalid payloads |

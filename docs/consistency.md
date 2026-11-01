@@ -290,7 +290,7 @@ The service cannot prevent this, because it cannot tell such a retry from a new 
 
 | ID | Gap | Impact | Direction |
 |---|---|---|---|
-| G1 | No reservation expiry (out of scope for this exercise) | A client that crashes keeps its reservation forever; `MAX_PARALLEL_CHUNKS` such crashes block the account | An `expires_at` per reservation; expired reservations released inside the admission transaction and by a periodic sweep; an endpoint to extend long uploads |
+| G1 | No reservation expiry (out of scope for this exercise) | A client that crashes keeps its reservation forever; `MAX_PARALLEL_CHUNKS` such crashes block the account until someone finds them with `GET /accounts/{accountID}/reservations` and releases them | An `expires_at` per reservation; expired reservations released inside the admission transaction and by a periodic sweep; an endpoint to extend long uploads |
 | G2 | Idempotency keys and released rows are kept forever | The table grows without bound | A retention window (for example 24 h) after which released rows and their keys are purged |
 | G3 | Single instance | The in-flight guard is per process, and the SQLite file is local | PostgreSQL, with admission through `SELECT … FOR UPDATE` on the account row or a conditional `UPDATE`; the `UNIQUE` constraint keeps idempotency correct across instances |
 | G4 | No authentication | Anyone can reserve or release on any account | The account comes from the authenticated identity (Zitadel, according to the environment configuration), not from the path |

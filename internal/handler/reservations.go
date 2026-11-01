@@ -21,6 +21,10 @@ type reservationBody struct {
 	ReleasedAt *time.Time `json:"released_at"`
 }
 
+type reservationListBody struct {
+	Reservations []reservationBody `json:"reservations"`
+}
+
 func (handlers *apiHandlers) reserve(writer http.ResponseWriter, request *http.Request) {
 	idempotencyKey, bytes, err := readReserveRequest(writer, request)
 	if err != nil {
@@ -39,6 +43,19 @@ func (handlers *apiHandlers) reserve(writer http.ResponseWriter, request *http.R
 	}
 	writer.Header().Set("Location", "/accounts/"+reservation.AccountID+"/reservations/"+reservation.ID)
 	handlers.writeJSON(request.Context(), writer, http.StatusCreated, jsonContentType, newReservationBody(reservation))
+}
+
+func (handlers *apiHandlers) listActiveReservations(writer http.ResponseWriter, request *http.Request) {
+	reservations, err := handlers.storage.ListActiveReservations(request.Context(), request.PathValue("accountID"))
+	if err != nil {
+		handlers.writeError(writer, request, err)
+		return
+	}
+	body := reservationListBody{Reservations: make([]reservationBody, 0, len(reservations))}
+	for _, reservation := range reservations {
+		body.Reservations = append(body.Reservations, newReservationBody(reservation))
+	}
+	handlers.writeJSON(request.Context(), writer, http.StatusOK, jsonContentType, body)
 }
 
 func readReserveRequest(writer http.ResponseWriter, request *http.Request) (string, int64, error) {

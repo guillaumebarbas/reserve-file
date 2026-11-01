@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -71,4 +73,34 @@ func TestService_ReserveReturnsRepositoryErrors(t *testing.T) {
 	if !errors.Is(err, domain.ErrAccountNotFound) {
 		t.Errorf("Reserve on an unknown account: got error %v, want domain.ErrAccountNotFound", err)
 	}
+}
+
+func TestService_ListActiveReservationsChecksTheAccount(t *testing.T) {
+	activeReservations := []domain.Reservation{
+		{ID: "reservation_1", AccountID: "small_account", Bytes: 4194304, Status: domain.StatusActive},
+		{ID: "reservation_2", AccountID: "small_account", Bytes: 31457280, Status: domain.StatusActive},
+	}
+	accounts := &fakeAccountRepository{
+		accounts:           map[string]domain.Account{"small_account": domain.RestoreAccount("small_account", 104857600, 35651584, 2)},
+		activeReservations: activeReservations,
+	}
+	storage := New(accounts, limitProviderNeverCalled{t: t}, time.Now)
+
+	_, unknownAccountErr := storage.ListActiveReservations(t.Context(), "unknown_account")
+	got, err := storage.ListActiveReservations(t.Context(), "small_account")
+
+	if !errors.Is(unknownAccountErr, domain.ErrAccountNotFound) {
+		t.Errorf("ListActiveReservations of unknown_account: got error %v, want domain.ErrAccountNotFound", unknownAccountErr)
+	}
+	if err != nil || !slices.Equal(got, activeReservations) {
+		t.Errorf("ListActiveReservations of small_account: got %+v and error %v, want the repository's %+v", got, err, activeReservations)
+	}
+	if !slices.Equal(accounts.listedAccountIDs, []string{"small_account"}) {
+		t.Errorf("accounts whose list was read: got %v, want only small_account: an unknown account is refused before any read", accounts.listedAccountIDs)
+	}
+}
+
+func (repository *fakeAccountRepository) ListActiveReservations(ctx context.Context, accountID string) ([]domain.Reservation, error) {
+	repository.listedAccountIDs = append(repository.listedAccountIDs, accountID)
+	return repository.activeReservations, nil
 }

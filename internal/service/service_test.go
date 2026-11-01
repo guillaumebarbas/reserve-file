@@ -8,12 +8,14 @@ import (
 )
 
 type fakeAccountRepository struct {
-	accounts          map[string]domain.Account
-	reserveErr        error
-	reservedCandidate domain.Reservation
-	reservedMaxActive domain.MaxActive
-	storedReservation domain.Reservation
-	releaseRequest    releaseRequest
+	accounts           map[string]domain.Account
+	reserveErr         error
+	reservedCandidate  domain.Reservation
+	reservedMaxActive  domain.MaxActive
+	storedReservation  domain.Reservation
+	releaseRequest     releaseRequest
+	activeReservations []domain.Reservation
+	listedAccountIDs   []string
 }
 
 func (repository *fakeAccountRepository) Account(ctx context.Context, accountID string) (domain.Account, error) {

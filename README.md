@@ -158,6 +158,16 @@ Idempotent-Replayed: true
 
 A refused attempt stores nothing, so the same key can succeed once there is room. The same key with another size is a client bug: it is refused with `422 idempotency_key_reused` and the original size in `original_bytes`, and nothing is reserved. A second request with the same key while the first is still being processed gets `409 request_in_progress` with `Retry-After: 1`; its retry then gets the replay.
 
+List the account's active reservations, oldest first, each with the same body as a single read; `{"reservations":[]}` when none is active:
+
+```sh
+curl -s http://localhost:8080/accounts/small_account/reservations
+```
+
+```json
+{"reservations":[{"id":"01a1988c-8e0a-77f2-8afe-1c0d35876fe2","account_id":"small_account","bytes":31457280,"status":"active","created_at":"2026-11-01T19:18:30.666Z","released_at":null}]}
+```
+
 Read the reservation back with the `id` from the response, then release it; the space comes back at once:
 
 ```sh
@@ -177,6 +187,7 @@ Every response carries an `X-Request-Id`; `docker compose logs api` shows one li
 |---|---|---|
 | `GET` | `/accounts/{accountID}/usage` | Limit, reserved and available space, active reservations and `MAX_PARALLEL_CHUNKS` |
 | `POST` | `/accounts/{accountID}/reservations` | Reserve space, with an `Idempotency-Key`; a retry with the same key is replayed |
+| `GET` | `/accounts/{accountID}/reservations` | List the active reservations, oldest first |
 | `GET` | `/accounts/{accountID}/reservations/{reservationID}` | Read a reservation |
 | `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation; repeating it returns the same body |
 | `GET` | `/healthz` | Liveness |
@@ -272,13 +283,14 @@ The reasons, the invariants and the failure handling are in [docs/decisions.md](
 
 ## Status
 
-Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2), with its acceptance criteria, its tests and their results. All 23 are done: the core API and its persistence (T01 to T11), the edge cases (T13 to T21), the container tests (T22), this README and the demo (T12), and the OpenAPI description (T23).
+Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2), with its acceptance criteria, its tests and their results. All 24 are done: the core API and its persistence (T01 to T11), the edge cases (T13 to T21), the container tests (T22), this README and the demo (T12), the OpenAPI description (T23), and the list of active reservations (T53), an extra added at the end.
 
 ### Time spent
 
 - Before the first ticket, the design and the tooling: docs, decisions, tickets, project rules, GitHub setup.
 - T01 to T03, one ticket at a time: about 1 h 35 min.
 - T04 to T23, built in parallel by agents and reviewed one at a time: about 1 h 45 min of wall-clock time.
+- T53, the list of active reservations, added at the end: about 25 min, review included.
 
 ### Gaps that would block a production release
 

@@ -13,9 +13,14 @@ import (
 )
 
 const (
-	selectReservation      = `SELECT id, account_id, idempotency_key, bytes, status, created_at, released_at FROM reservations WHERE id = ? AND account_id = ?`
-	selectReservationByKey = `SELECT id, account_id, idempotency_key, bytes, status, created_at, released_at FROM reservations WHERE account_id = ? AND idempotency_key = ?`
+	selectReservation        = `SELECT id, account_id, idempotency_key, bytes, status, created_at, released_at FROM reservations WHERE id = ? AND account_id = ?`
+	selectReservationByKey   = `SELECT id, account_id, idempotency_key, bytes, status, created_at, released_at FROM reservations WHERE account_id = ? AND idempotency_key = ?`
+	selectActiveReservations = `SELECT id, account_id, idempotency_key, bytes, status, created_at, released_at FROM reservations WHERE account_id = ? AND status = ? ORDER BY created_at, id`
 )
+
+type rowScanner interface {
+	Scan(destination ...any) error
+}
 
 func (store *Store) Reserve(ctx context.Context, candidate domain.Reservation, maxActive domain.MaxActive) (domain.Reservation, domain.Outcome, error) {
 	transaction, err := store.database.BeginTx(ctx, nil)
@@ -47,6 +52,23 @@ func (store *Store) Reserve(ctx context.Context, candidate domain.Reservation, m
 	return reservation, outcome, translateDriverError("commit reserve", transaction.Commit())
 }
 
+func (store *Store) ListActiveReservations(ctx context.Context, accountID string) ([]domain.Reservation, error) {
+	rows, err := store.database.QueryContext(ctx, selectActiveReservations, accountID, string(domain.StatusActive))
+	if err != nil {
+		return nil, translateDriverError("list active reservations", err)
+	}
+	defer rows.Close()
+	var reservations []domain.Reservation
+	for rows.Next() {
+		reservation, scanErr := scanReservation(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		reservations = append(reservations, reservation)
+	}
+	return reservations, translateDriverError("list active reservations", rows.Err())
+}
+
 func findReservationByKey(ctx context.Context, transaction *sql.Tx, accountID, idempotencyKey string) (*domain.Reservation, error) {
 	reservation, err := scanReservation(transaction.QueryRowContext(ctx, selectReservationByKey, accountID, idempotencyKey))
 	if errors.Is(err, domain.ErrReservationNotFound) {
@@ -58,7 +80,7 @@ func findReservationByKey(ctx context.Context, transaction *sql.Tx, accountID, i
 	return &reservation, nil
 }
 
-func scanReservation(row *sql.Row) (domain.Reservation, error) {
+func scanReservation(row rowScanner) (domain.Reservation, error) {
 	var reservationID, accountID, idempotencyKey, status string
 	var bytes, createdAt int64
 	var releasedAt sql.NullInt64

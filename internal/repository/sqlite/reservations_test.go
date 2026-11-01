@@ -1,13 +1,16 @@
 package sqlite
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/guillaumebarbas/reserve-file/internal/domain"
+	sqlitedriver "modernc.org/sqlite"
 )
 
 func TestReserve_CreatesAndUpdatesCounters(t *testing.T) {
@@ -323,4 +326,91 @@ func assertInvariants(t *testing.T, database *sql.DB) {
 	if len(accountIDs) > 0 {
 		t.Errorf("invariants I1 and I2 broken for %v: the counters differ from the active reservations", accountIDs)
 	}
+}
+
+func TestListActiveReservations_OnlyActiveOldestFirst(t *testing.T) {
+	store := openStore(t, newDatabasePath(t), map[string]int64{"small_account": 104857600, "large_account": 10737418240})
+	oldest := newCandidate("small_account", "reservation_c", "key_b", 1048576)
+	oldest.CreatedAt = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	middle := newCandidate("small_account", "reservation_a", "key_c", 2097152)
+	middle.CreatedAt = time.Date(2026, 11, 1, 12, 1, 0, 0, time.UTC)
+	newest := newCandidate("small_account", "reservation_b", "key_a", 3145728)
+	newest.CreatedAt = time.Date(2026, 11, 1, 12, 2, 0, 0, time.UTC)
+	released := newCandidate("small_account", "reservation_d", "key_d", 4194304)
+	otherAccount := newCandidate("large_account", "reservation_e", "key_e", 5242880)
+	for _, candidate := range []domain.Reservation{middle, released, oldest, otherAccount, newest} {
+		if _, _, err := store.Reserve(t.Context(), candidate, domain.MaxActive{Value: 5, Known: true}); err != nil {
+			t.Fatalf("reserve %s: %v", candidate.ID, err)
+		}
+	}
+	if _, err := store.Release(t.Context(), "small_account", released.ID, time.Date(2026, 11, 1, 12, 3, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("release %s: %v", released.ID, err)
+	}
+
+	got, err := store.ListActiveReservations(t.Context(), "small_account")
+
+	want := []domain.Reservation{oldest, middle, newest}
+	if err != nil || !slices.Equal(got, want) {
+		t.Errorf("ListActiveReservations of small_account:\n got  %+v and error %v\n want %+v: its active reservations, oldest first", got, err, want)
+	}
+	assertInvariants(t, store.database)
+}
+
+func TestListActiveReservations_DatabaseUnavailable(t *testing.T) {
+	store := openStore(t, newDatabasePath(t), map[string]int64{"small_account": 104857600})
+	reserveForTest(t, store, "small_account", "reservation_1", 1048576)
+	_ = store.Close()
+
+	reservations, err := store.ListActiveReservations(t.Context(), "small_account")
+
+	assertOnlyServiceUnavailable(t, "ListActiveReservations on a closed database", err)
+	if reservations != nil {
+		t.Errorf("ListActiveReservations on a closed database: got %+v, want no reservations", reservations)
+	}
+}
+
+func TestListActiveReservations_UnreadableRowFailsTheWholeList(t *testing.T) {
+	store := openStore(t, newDatabasePath(t), map[string]int64{"small_account": 104857600})
+	reserveForTest(t, store, "small_account", "reservation_1", 1048576)
+	reserveForTest(t, store, "small_account", "reservation_2", 2097152)
+	execute(t, store, "ALTER TABLE reservations RENAME TO stored_reservations")
+	execute(t, store, "CREATE VIEW reservations AS SELECT id, account_id, CASE id WHEN 'reservation_2' THEN NULL ELSE idempotency_key END AS idempotency_key, bytes, status, created_at, released_at FROM stored_reservations")
+
+	reservations, err := store.ListActiveReservations(t.Context(), "small_account")
+
+	assertOnlyServiceUnavailable(t, "ListActiveReservations with an unreadable second row", err)
+	if reservations != nil {
+		t.Errorf("ListActiveReservations with an unreadable second row: got %+v, want no reservations, not the first one alone", reservations)
+	}
+}
+
+func TestListActiveReservations_ErrorOnTheSecondRowFailsTheWholeList(t *testing.T) {
+	failingFunctionName := registerFunctionFailingOnReservation(t, "reservation_2")
+	store := openStore(t, newDatabasePath(t), map[string]int64{"small_account": 104857600})
+	reserveForTest(t, store, "small_account", "reservation_1", 1048576)
+	reserveForTest(t, store, "small_account", "reservation_2", 2097152)
+	execute(t, store, "ALTER TABLE reservations RENAME TO stored_reservations")
+	execute(t, store, "CREATE VIEW reservations AS SELECT id, account_id, "+failingFunctionName+"(id, idempotency_key) AS idempotency_key, bytes, status, created_at, released_at FROM stored_reservations")
+
+	reservations, err := store.ListActiveReservations(t.Context(), "small_account")
+
+	assertOnlyServiceUnavailable(t, "ListActiveReservations when the second row raises an error", err)
+	if reservations != nil {
+		t.Errorf("ListActiveReservations when the second row raises an error: got %+v, want no reservations, not the first one alone", reservations)
+	}
+}
+
+func registerFunctionFailingOnReservation(t *testing.T, failingReservationID string) string {
+	t.Helper()
+	functionName := "fail_on_reservation_" + rand.Text()
+	err := sqlitedriver.RegisterScalarFunction(functionName, 2, func(functionContext *sqlitedriver.FunctionContext, arguments []driver.Value) (driver.Value, error) {
+		if arguments[0] == failingReservationID {
+			return nil, errors.New("injected failure")
+		}
+		return arguments[1], nil
+	})
+	if err != nil {
+		t.Fatalf("register the SQL function %s: %v", functionName, err)
+	}
+	return functionName
 }
