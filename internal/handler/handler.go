@@ -10,9 +10,14 @@ type DatabasePinger interface {
 	Ping(ctx context.Context) error
 }
 
+type LimitProvider interface {
+	MaxActive() (int, bool)
+}
+
 type apiHandlers struct {
-	logger   *slog.Logger
-	database DatabasePinger
+	logger        *slog.Logger
+	database      DatabasePinger
+	limitProvider LimitProvider
 }
 
 type livenessBody struct {
@@ -21,10 +26,11 @@ type livenessBody struct {
 
 type readinessBody struct {
 	Database string `json:"database"`
+	Limits   string `json:"limits"`
 }
 
-func New(logger *slog.Logger, database DatabasePinger) http.Handler {
-	handlers := &apiHandlers{logger: logger, database: database}
+func New(logger *slog.Logger, database DatabasePinger, limitProvider LimitProvider) http.Handler {
+	handlers := &apiHandlers{logger: logger, database: database, limitProvider: limitProvider}
 	routes := http.NewServeMux()
 	routes.HandleFunc("GET /healthz", handlers.reportLiveness)
 	routes.HandleFunc("GET /readyz", handlers.reportReadiness)
@@ -36,10 +42,15 @@ func (handlers *apiHandlers) reportLiveness(writer http.ResponseWriter, request 
 }
 
 func (handlers *apiHandlers) reportReadiness(writer http.ResponseWriter, request *http.Request) {
+	readiness := readinessBody{Database: "ok", Limits: "ok"}
+	if _, known := handlers.limitProvider.MaxActive(); !known {
+		readiness.Limits = "unavailable"
+	}
 	if err := handlers.database.Ping(request.Context()); err != nil {
 		handlers.logger.Warn("database not ready", "request_id", requestIDFrom(request.Context()), "error", err)
-		handlers.writeJSON(request.Context(), writer, http.StatusServiceUnavailable, jsonContentType, readinessBody{Database: "unavailable"})
+		readiness.Database = "unavailable"
+		handlers.writeJSON(request.Context(), writer, http.StatusServiceUnavailable, jsonContentType, readiness)
 		return
 	}
-	handlers.writeJSON(request.Context(), writer, http.StatusOK, jsonContentType, readinessBody{Database: "ok"})
+	handlers.writeJSON(request.Context(), writer, http.StatusOK, jsonContentType, readiness)
 }

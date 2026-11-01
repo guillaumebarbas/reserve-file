@@ -7,6 +7,7 @@ services:
     environment:
       # Empty unless set in the shell or in .env: the service then seeds its default accounts.
       SEED_ACCOUNTS: ${SEED_ACCOUNTS:-}
+      ENV_CONFIG_URL: ${ENV_CONFIG_URL:-https://env.hivenet.com/dev}
     volumes:
       - data:/data
     healthcheck:

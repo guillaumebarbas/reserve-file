@@ -148,10 +148,11 @@ Reads the account (a single-row read is consistent without an explicit transacti
 
 ## External limit component
 
-The `limits` package:
-- **`Init(ctx)`**: loads the persisted value, then attempts one fetch (bounded by the 3 s timeout). Synchronous.
-- **`MaxActive()`**: an atomic read. It never blocks and never does I/O.
-- **`Run(ctx)`**: blocks and refreshes every 60 s until `ctx` is cancelled. On failure it keeps the current value and logs a warning. While no value is known, it retries with backoff from 1 s up to 30 s. `app` starts it in a goroutine it owns, on the application context (never a request's), and waits for it at shutdown. The package itself starts no goroutine.
+The `limits` package, whose `Cache` type holds the value:
+- **`Init(ctx)`**: loads the persisted value, then attempts one fetch (bounded by the 3 s timeout). Synchronous. A failure is logged and never stops the startup.
+- **`MaxActive()`**: an atomic read of an `atomic.Int64`, where 0 means unknown since a valid value is at least 1. It never blocks and never does I/O.
+- **`Run(ctx)`**: blocks and refreshes every 60 s until `ctx` is cancelled. On failure it keeps the current value and logs a warning. While no value is known, it retries with backoff from 1 s up to 30 s (T18). `app` starts it in a goroutine it owns, on the application context (never a request's), stops it once the HTTP server has stopped, and waits for it before closing the database. The package itself starts no goroutine.
+- **Persistence**: a new value is saved through `limits.Store` (`LoadMaxParallelChunks`, `SaveMaxParallelChunks`), which `sqlite.Store` implements on the `settings` table; an unchanged value is not written again.
 - **Validation**: status 200, body at most 1 MiB, a JSON object, `MAX_PARALLEL_CHUNKS` an integer ≥ 1. The body is never logged, because it contains analytics tokens.
 - **HTTP client**: its own `http.Client` with a timeout, never `http.Get` or `http.DefaultClient`; the response body is always closed.
 
@@ -189,7 +190,7 @@ The `limits` package:
 - **Signals**: `ENTRYPOINT ["/app/api"]` in exec form, so the process is PID 1 and receives SIGTERM directly. Compose waits 15 s (`stop_grace_period`) before killing it, longer than the 10 s shutdown timeout.
 - **Health check**: distroless has no curl, so the binary's `healthcheck` subcommand calls `/healthz`. When `HTTP_ADDR` listens on every interface, it calls `127.0.0.1`: Docker runs the check inside the container, next to the server.
 - **Compose**:
-  - `api`: host port `${API_PORT:-8080}` (Windows can reserve port ranges, so a local `.env` may override it), named volume `data`, and `SEED_ACCOUNTS` passed through from the shell or `.env` (left empty, the service seeds its default accounts);
+  - `api`: host port `${API_PORT:-8080}` (Windows can reserve port ranges, so a local `.env` may override it), named volume `data`, and `SEED_ACCOUNTS` passed through from the shell or `.env` (left empty, the service seeds its default accounts), as is `ENV_CONFIG_URL`, which defaults to the dev URL;
   - `test`: `golang:1.27` with the source mounted, running `go vet ./...`, `go test -race` with a coverage profile, then `scripts/check-coverage.sh`, which fails below 100%;
   - `demo`: a curl image running `scripts/demo.sh` against `api`.
 
