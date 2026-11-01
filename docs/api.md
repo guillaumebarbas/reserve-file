@@ -125,9 +125,9 @@ curl -s http://localhost:8080/accounts/large_account/usage
 | Endpoint | `200` when | Body |
 |---|---|---|
 | `/healthz` | The process serves HTTP | `{"status":"ok"}` |
-| `/readyz` | The database answers | `{"database":"ok","limits":"ok"}`, where `limits` is `"unavailable"` while `MAX_PARALLEL_CHUNKS` is unknown |
+| `/readyz` | The database answers a ping | `{"database":"ok","limits":"ok"}`, where `limits` is `"unavailable"` while `MAX_PARALLEL_CHUNKS` is unknown. `limits` comes with the limit source (T04). |
 
-An unknown limit does not fail readiness, because release, usage and replays still work. `/readyz` returns `503` only when the database does not answer.
+An unknown limit does not fail readiness, because release, usage and replays still work. `/readyz` returns `503` only when the database does not answer, with `"database":"unavailable"` in the same body; the cause goes to the log with the request ID.
 
 ## Errors
 
@@ -151,7 +151,8 @@ X-Request-Id: c0a8f3e2b71d4e5f
 
 - `code` is stable, so clients branch on it. `detail` is written for humans and may change.
 - `type` points to the code's entry in the table below.
-- `5xx` responses never contain internal error text; `request_id` links them to the server logs.
+- `5xx` responses never contain internal error text; `request_id` links them to the server log, where the error is written.
+- Every request writes one access log line: `request_id`, method, path, status and duration.
 
 | `code` | Status | When | `detail` example | Extra fields | `Retry-After` |
 |---|---|---|---|---|---|
@@ -160,7 +161,7 @@ X-Request-Id: c0a8f3e2b71d4e5f
 | <a id="account_not_found"></a>`account_not_found` | 404 | Unknown account | "Account 'unknown_account' does not exist." | — | — |
 | <a id="reservation_not_found"></a>`reservation_not_found` | 404 | Unknown reservation, or one owned by another account | "Reservation '01a1…' does not exist for account 'large_account'." | — | — |
 | <a id="request_in_progress"></a>`request_in_progress` | 409 | The same key is still being processed | "A request with this Idempotency-Key is still being processed. Retry in a moment to get its result." | — | 1 |
-| <a id="too_many_active_reservations"></a>`too_many_active_reservations` | 409 | `active_reservations ≥ MAX_PARALLEL_CHUNKS` | "You already have 5 active reservations, the maximum allowed. Release a reservation before creating a new one." | `active_reservations`, `max_active_reservations` | — |
+| <a id="too_many_active_reservations"></a>`too_many_active_reservations` | 409 | `active_reservations ≥ MAX_PARALLEL_CHUNKS` | "You have 5 active reservations and the maximum is 5. Release a reservation before creating a new one." | `active_reservations`, `max_active_reservations` | — |
 | <a id="insufficient_storage"></a>`insufficient_storage` | 409 | `bytes > limit − reserved` | "Requested 5.00 GiB but only 1.20 GiB is available (limit 10.00 GiB). Release a reservation or request less space." | `requested_bytes`, `available_bytes`, `limit_bytes` | — |
 | <a id="request_too_large"></a>`request_too_large` | 413 | Body over 4 KiB | "The request body must not exceed 4096 bytes." | — | — |
 | <a id="idempotency_key_reused"></a>`idempotency_key_reused` | 422 | Same key, different `bytes` | "This Idempotency-Key was already used to reserve 4194304 bytes. Use a new key for a new request." | `original_bytes` | — |

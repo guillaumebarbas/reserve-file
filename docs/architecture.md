@@ -161,10 +161,12 @@ The `limits` package:
 
 **HTTP server timeouts:** read header 5 s, read 10 s, write 15 s, idle 60 s. The write timeout is longer than SQLite's 5 s busy timeout, so a `503` sent after a lock wait still reaches the client.
 
-**Middleware:**
-- request ID, generated per request, returned in `X-Request-Id` and attached to every log line;
-- access log;
-- panic recovery, which answers `500 internal_error`.
+**Middleware**, from the outside in:
+- request ID: 16 random hexadecimal characters (`crypto/rand`), returned in `X-Request-Id`, stored in the request context and written on every log line of the request;
+- access log: one line per request, with method, path, status and duration;
+- panic recovery, which answers `500 internal_error` and logs the panic with its stack trace. It sits inside the access log, so the log records that `500`.
+
+**Readiness:** `handler` declares a one-method interface, `DatabasePinger`, that `sqlite.Store` satisfies without knowing it; `app` passes the store to `handler.New`. `Store.Ping` translates the driver error into `domain.ErrServiceUnavailable`.
 
 ## Configuration
 
