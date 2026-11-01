@@ -248,14 +248,16 @@ On SIGTERM, the server stops accepting connections, finishes in-flight requests 
 
 | Input | Response |
 |---|---|
-| `bytes` missing, `0`, negative, decimal, a string, or above 2⁶³−1 | `400 invalid_request` |
+| `bytes` missing, `null`, `0`, negative, decimal, an exponent, a string, or above 2⁶³−1 | `400 invalid_request`, with a `detail` showing the value received |
 | Unknown JSON field, or trailing data after the object | `400 invalid_request` |
 | Body over 4 KiB | `413 request_too_large` |
-| `Idempotency-Key` missing, empty, over 255 characters, or non-printable | `400 invalid_idempotency_key` |
+| `Idempotency-Key` missing, empty, over 255 characters, or with a character outside visible ASCII (`0x21` to `0x7E`: no space, no tab, no accented letter) | `400 invalid_idempotency_key`, with a `detail` naming the rule |
 | Unknown account or reservation | `404` |
 | `bytes` above the account's entire limit | `409 insufficient_storage` |
 
-**Proved by.** `TestAPI_ReserveValidation`, `TestAccount_Reserve`.
+Every check runs in the handler, before the service is called, so an invalid request never reaches the database: its key stays unused.
+
+**Proved by.** `TestAPI_ReserveValidation`, `TestAPI_ReserveStoresNothingForAnInvalidRequest`, `TestValidateIdempotencyKey_RejectsInvalidKeys`, `TestReadReserveRequest_RejectsInvalidBytes`, `TestAccount_Reserve`.
 
 ### P14 — MAX_PARALLEL_CHUNKS becomes very large
 
