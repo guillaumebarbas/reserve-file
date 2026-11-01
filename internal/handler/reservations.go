@@ -27,9 +27,14 @@ func (handlers *apiHandlers) reserve(writer http.ResponseWriter, request *http.R
 		handlers.writeError(writer, request, err)
 		return
 	}
-	reservation, err := handlers.storage.Reserve(request.Context(), request.PathValue("accountID"), idempotencyKey, bytes)
+	reservation, outcome, err := handlers.storage.Reserve(request.Context(), request.PathValue("accountID"), idempotencyKey, bytes)
 	if err != nil {
 		handlers.writeError(writer, request, err)
+		return
+	}
+	if outcome == domain.Replayed {
+		writer.Header().Set("Idempotent-Replayed", "true")
+		handlers.writeJSON(request.Context(), writer, http.StatusOK, jsonContentType, newReservationBody(reservation))
 		return
 	}
 	writer.Header().Set("Location", "/accounts/"+reservation.AccountID+"/reservations/"+reservation.ID)

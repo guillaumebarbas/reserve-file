@@ -13,7 +13,7 @@ import (
 
 func TestReserve_ConcurrentRequestsNeverExceedLimit(t *testing.T) {
 	store := openStore(t, newDatabasePath(t), map[string]int64{"small_account": 104857600})
-	if err := store.Reserve(t.Context(), newCandidate("small_account", "reservation_setup", "key_setup", 31457280), domain.MaxActive{Value: 100, Known: true}); err != nil {
+	if _, _, err := store.Reserve(t.Context(), newCandidate("small_account", "reservation_setup", "key_setup", 31457280), domain.MaxActive{Value: 100, Known: true}); err != nil {
 		t.Fatalf("reserve 30 MiB first: %v", err)
 	}
 	candidates := newCandidates("small_account", 50, 20971520)
@@ -63,7 +63,7 @@ func reserveConcurrently(ctx context.Context, store *Store, candidates []domain.
 	for index, candidate := range candidates {
 		requests.Go(func() {
 			<-start
-			results[index] = store.Reserve(ctx, candidate, maxActive)
+			_, _, results[index] = store.Reserve(ctx, candidate, maxActive)
 		})
 	}
 	close(start)
