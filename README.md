@@ -91,6 +91,8 @@ A demo script that shows a reservation, a retry, concurrent requests and a relea
 
 ## Design
 
+How reservations work; the endpoints are being built in T05 to T09.
+
 - Each reserve or release is one SQLite write transaction. The account row carries its counters, so admission reads one row, whatever the number of reservations.
 - The client sends an `Idempotency-Key`. It is stored with the reservation, so a retry gets the same reservation instead of a second one.
 - `MAX_PARALLEL_CHUNKS` is fetched from `https://env.hivenet.com/dev` in the background and cached; no request waits for it.
@@ -110,9 +112,9 @@ Time spent so far: T01 35 min, T02 30 min, T03 30 min, after the design and tool
 ## How AI was used
 
 - Claude Code wrote the design docs, the tickets, the project rules and the code, test first.
-- I directed the work: I made the decisions, validated each plan and step, and asked for changes, such as the rich `Account` aggregate, descriptive names and no code comments.
+- I directed the work: I made the decisions, validated the plans and asked for changes, such as the rich `Account` aggregate, descriptive names and no code comments.
 - Every ticket goes through a pull request, and the review is published on it.
-- From the limit source on, independent tickets are built in parallel by Claude Code agents in separate git worktrees; one session reviews and merges them.
+- From the limit source on, independent tickets are built in parallel by Claude Code agents in separate git worktrees; a Claude Code session reviews their pull requests on GitHub and merges them.
 - I can explain and modify every part of the code.
 
 ## Repository
