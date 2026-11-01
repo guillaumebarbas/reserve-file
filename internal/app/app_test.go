@@ -191,6 +191,7 @@ func startServerOn(t *testing.T, host string) string {
 }
 
 func newDatabasePath(t *testing.T) string {
+	t.Helper()
 	return filepath.Join(t.TempDir(), "reserve.db")
 }
 

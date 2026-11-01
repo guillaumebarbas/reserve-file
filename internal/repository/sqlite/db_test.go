@@ -175,6 +175,7 @@ func TestSeed_UpsertsLimitOnly(t *testing.T) {
 }
 
 func newDatabasePath(t *testing.T) string {
+	t.Helper()
 	return filepath.Join(t.TempDir(), "reserve.db")
 }
 
