@@ -47,7 +47,9 @@ internal/
 │   └── errors.go             typed errors carrying facts, sentinel errors
 ├── service/
 │   ├── ports.go              AccountRepository, LimitProvider
-│   ├── reservation.go        Reserve, Release, Reservation, Usage
+│   ├── service.go            Service, New
+│   ├── usage.go              Usage
+│   ├── reservation.go        Reserve, Release, Reservation
 │   └── inflight.go           in-flight Idempotency-Key guard
 ├── repository/sqlite/
 │   ├── schema.sql            embedded, versioned with PRAGMA user_version
