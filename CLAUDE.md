@@ -15,7 +15,7 @@ Take-home exercise for Hivenet: a Go service that reserves storage space for upl
 
 - The user does not know Go yet and must explain and modify every line during a live interview. Readability beats cleverness.
 - Tickets are implemented with `/implement-task <ID>`: a plan first, then the `tdd` cycle with a validation from the user after every step. Never generate code ahead of the current step.
-- After each step, explain in French, in the chat: what changed, why, and each Go construct used for the first time, compared to Java when that helps. Code comments are written for reviewers: no Go tutorials in the code.
+- After each step, explain in French, in the chat: what changed, why, and each Go construct used for the first time, compared to Java when that helps. No comments in Go code, except the directives Go requires (`//go:embed`): names carry the meaning, and the reasons go in the chat or in `docs/`.
 - Ask before adding a dependency, or before changing an Accepted decision, the API contract or the schema.
 - Chat in French. Code, comments, commit messages, docs and tickets in English.
 

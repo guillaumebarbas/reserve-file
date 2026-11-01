@@ -38,7 +38,7 @@ When two rules conflict, the earlier one wins. A helper that makes the intention
 
 - Names carry the meaning: the domain words of `docs/` (reservation, release, usage, idempotency key), units in quantities (`limitBytes`), booleans that read as statements (`replayed`).
 - If a name needs a comment to be understood, rename it: `const deadlineIfRunHangs = 5 * time.Second` instead of a comment above each `5*time.Second`.
-- Comments: a doc comment on every package and exported name; elsewhere, only a "why" that the code cannot express. Never paraphrase the code.
+- No comments in Go code, doc comments included: Go requires none, so only toolchain directives (`//go:embed`) stay. A reason that no name can carry goes to the chat, or to `docs/` when reviewers need it.
 - A function reads top to bottom: the main path on the left edge, each error handled where it occurs.
 - Similar things look alike: same statement order, same error wording, same test layout across the codebase.
 
@@ -60,7 +60,7 @@ When two rules conflict, the earlier one wins. A helper that makes the intention
 3. Is every line required by a test or a ticket criterion?
 4. Is anything unused: a parameter, field, return value, export, branch or import?
 5. Does any name need a comment to be understood?
-6. Does any comment paraphrase the code, or say what a better name could?
+6. Is there any comment other than a toolchain directive?
 7. Is any function longer than about 40 lines, mixing levels of abstraction, or nested more than two levels deep?
 8. Is any knowledge duplicated: a literal, a rule or a message that drives behaviour?
 9. Is there an abstraction (interface, type, helper, package) with a single use and no test need?
