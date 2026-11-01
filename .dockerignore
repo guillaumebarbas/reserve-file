@@ -1,0 +1,11 @@
+# Only the Go sources are needed to build the image.
+.git
+.claude
+.env
+.mcp.json
+docs
+tasks
+*.md
+coverage.out
+*.db
+*.db-*

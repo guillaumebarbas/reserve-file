@@ -27,6 +27,7 @@ What the reviewer reads and runs first. The README answers the four points of th
   - how AI was used;
   - links to `docs/` and `tasks/`.
 - [ ] Every command in the README has been run on a fresh clone.
+- [ ] The base images (`golang`, `gcr.io/distroless/static`) are pinned by digest in the `Dockerfile` and `compose.yaml`, so the reviewer builds exactly what was tested. Raised in the review of #25.
 - [ ] At submission, the repository and the project board are made public: `gh repo edit guillaumebarbas/reserve-file --visibility public --accept-visibility-change-consequences` and `gh project edit 2 --owner guillaumebarbas --visibility PUBLIC`.
 - [ ] The README is updated after every ticket done later.
 

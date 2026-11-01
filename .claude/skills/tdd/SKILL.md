@@ -25,7 +25,7 @@ One test per cycle. Every step ends with a **stop**: show what was done, explain
 
 ## 3. Refactor
 
-8. Propose improvements (names, duplication, Go style rules), or say there is nothing to refactor and why.
+8. Propose improvements against the checklists of the `clean-code`, `clean-architecture` and `go-best-practices` skills, or say there is nothing to refactor and why.
 9. **Stop** if there are proposals; apply only the approved ones. Tests stay green after each change.
 10. `gofmt -l .` prints nothing, `go vet ./...` passes, and `go test -cover ./internal/<pkg>/` shows no new uncovered line. An uncovered line gets a test that reproduces the failure it handles, or is deleted.
 

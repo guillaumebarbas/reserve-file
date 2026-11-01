@@ -1,0 +1,40 @@
+services:
+  api:
+    build: .
+    ports:
+      # Windows can reserve port ranges (Hyper-V, WSL): set API_PORT in a local .env to use another host port.
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - data:/data
+    healthcheck:
+      test: ["CMD", "/app/api", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    # Longer than the service's 10 s shutdown timeout, so Docker does not kill it while requests finish.
+    stop_grace_period: 15s
+
+  test:
+    profiles: ["test"]
+    image: golang:1.27
+    working_dir: /src
+    environment:
+      # The race detector needs cgo.
+      CGO_ENABLED: "1"
+    volumes:
+      - .:/src
+      - go-build-cache:/root/.cache/go-build
+      - go-mod-cache:/go/pkg/mod
+    command:
+      - sh
+      - -c
+      - >-
+        go vet ./...
+        && go test -race -coverpkg=./internal/... -coverprofile=/tmp/coverage.out ./...
+        && sh scripts/check-coverage.sh /tmp/coverage.out
+
+volumes:
+  data:
+  go-build-cache:
+  go-mod-cache:

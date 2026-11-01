@@ -11,7 +11,7 @@ GitHub operations go through the GitHub MCP server (`github`, configured in `.mc
 ## 1. Preconditions
 
 1. The current branch is not `main`, and everything is committed and pushed (`git status`, `git log @{u}..`). Otherwise suggest `/push-code` and stop.
-2. Find the ticket and its issue from the branch name. If the branch already has an open pull request, this is a rework after a refusal: do not create another one. Show the user a short comment summarizing what changed since the review and, once they validate it, post it on the pull request. Then set the ticket state to `validation` (see Ticket state in `CLAUDE.md`), give the pull request URL and stop.
+2. Find the ticket and its issue from the branch name. If the branch already has an open pull request, this is a rework after a refusal: do not create another one. Prepare a reply to each unresolved review thread (the commit that addresses it, or the reason it is deferred and where it is tracked) and a short comment summarizing what changed since the review. Once the user validates them, post the replies, resolve the threads, and post the comment. Then set the ticket state to `validation` (see Ticket state in `CLAUDE.md`), give the pull request URL and stop.
    A branch without a ticket ID (tooling, docs) has no issue: the body has no `Closes` line, no ticket state changes, and step 3 is skipped.
 3. Check the ticket: every test ticked, **Test results** filled in, `docker compose run --rm test` run for this ticket. List what is missing; the user decides whether to open the pull request anyway, and if so it goes in Notes.
 
