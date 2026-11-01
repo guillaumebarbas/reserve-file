@@ -17,7 +17,7 @@ func TestHealthz(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	recorder := httptest.NewRecorder()
 
-	New(slog.New(slog.DiscardHandler), nil).ServeHTTP(recorder, request)
+	New(slog.New(slog.DiscardHandler), nil, nil).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Errorf("status: got %d, want %d", recorder.Code, http.StatusOK)
@@ -44,21 +44,45 @@ func TestAPI_Readyz(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	var logOutput bytes.Buffer
-	routes := New(slog.New(slog.NewJSONHandler(&logOutput, nil)), store)
+	routes := New(slog.New(slog.NewJSONHandler(&logOutput, nil)), store, fakeLimitProvider{maxActive: 5, known: true})
 
 	openStatus, openBody := getReadiness(routes)
 	_ = store.Close()
 	closedStatus, closedBody := getReadiness(routes)
 
-	if openStatus != http.StatusOK || openBody != `{"database":"ok"}` {
-		t.Errorf("GET /readyz with the database open: got %d %s, want 200 {\"database\":\"ok\"}", openStatus, openBody)
+	if openStatus != http.StatusOK || openBody != `{"database":"ok","limits":"ok"}` {
+		t.Errorf("GET /readyz with the database open: got %d %s, want 200 {\"database\":\"ok\",\"limits\":\"ok\"}", openStatus, openBody)
 	}
-	if closedStatus != http.StatusServiceUnavailable || closedBody != `{"database":"unavailable"}` {
-		t.Errorf("GET /readyz with the database closed: got %d %s, want 503 {\"database\":\"unavailable\"}", closedStatus, closedBody)
+	if closedStatus != http.StatusServiceUnavailable || closedBody != `{"database":"unavailable","limits":"ok"}` {
+		t.Errorf("GET /readyz with the database closed: got %d %s, want 503 {\"database\":\"unavailable\",\"limits\":\"ok\"}", closedStatus, closedBody)
 	}
 	if !strings.Contains(logOutput.String(), `"msg":"database not ready"`) {
 		t.Errorf("log %q: want the readiness failure", logOutput.String())
 	}
+}
+
+func TestAPI_ReadyzReportsLimits(t *testing.T) {
+	store, err := sqlite.Open(t.Context(), filepath.Join(t.TempDir(), "reserve.db"), nil)
+	if err != nil {
+		t.Fatalf("open the database: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	routes := New(slog.New(slog.DiscardHandler), store, fakeLimitProvider{known: false})
+
+	status, body := getReadiness(routes)
+
+	if status != http.StatusOK || body != `{"database":"ok","limits":"unavailable"}` {
+		t.Errorf("GET /readyz with the limit unknown: got %d %s, want 200 {\"database\":\"ok\",\"limits\":\"unavailable\"}", status, body)
+	}
+}
+
+type fakeLimitProvider struct {
+	maxActive int
+	known     bool
+}
+
+func (provider fakeLimitProvider) MaxActive() (int, bool) {
+	return provider.maxActive, provider.known
 }
 
 func getReadiness(routes http.Handler) (int, string) {
