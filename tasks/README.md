@@ -30,7 +30,7 @@ One ticket per step: the foundations, each feature, and each edge case or small 
 | [T16](T16-retry-after-change.md) | Retry after the situation changed | Case | P1 | 15 min | T08, T09 | [#16](https://github.com/guillaumebarbas/reserve-file/issues/16) | `feat/t16-retry-after-change` | 15 min |
 | [T17](T17-release-not-found.md) | Release of an unknown or foreign reservation | Case | P1 | 10 min | T09 | [#17](https://github.com/guillaumebarbas/reserve-file/issues/17) | `feat/t17-release-not-found` | 10 min |
 | [T18](T18-limit-source-down.md) | Limit source down or invalid | Case | P1 | 25 min | T04, T06, T09 | [#18](https://github.com/guillaumebarbas/reserve-file/issues/18) | `feat/t18-limit-source-down` | 25 min (two parts) |
-| [T19](T19-limits-lowered.md) | Limits lowered below current usage | Case | P1 | 15 min | T06, T09 | [#19](https://github.com/guillaumebarbas/reserve-file/issues/19) | `feat/t19-limits-lowered` | |
+| [T19](T19-limits-lowered.md) | Limits lowered below current usage | Case | P1 | 15 min | T06, T09 | [#19](https://github.com/guillaumebarbas/reserve-file/issues/19) | `feat/t19-limits-lowered` | 20 min |
 | [T20](T20-database-unavailable.md) | Database unavailable | Case | P1 | 20 min | T06, T09 | [#20](https://github.com/guillaumebarbas/reserve-file/issues/20) | `feat/t20-database-unavailable` | 20 min |
 | [T21](T21-no-partial-state.md) | No partial state after a failure mid-transaction | Case | P1 | 15 min | T06, T09 | [#21](https://github.com/guillaumebarbas/reserve-file/issues/21) | `feat/t21-no-partial-state` | 20 min |
 | [T22](T22-container-tests.md) | Container tests | Delivery | P1 | 40 min | T11 | [#22](https://github.com/guillaumebarbas/reserve-file/issues/22) | `chore/t22-container-tests` | 30 min |
