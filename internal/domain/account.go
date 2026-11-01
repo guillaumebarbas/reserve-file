@@ -28,20 +28,23 @@ func (account Account) ActiveReservations() int {
 	return account.activeReservations
 }
 
-func (account *Account) Reserve(candidate Reservation, maxActive MaxActive) error {
+func (account *Account) Reserve(candidate Reservation, existing *Reservation, maxActive MaxActive) (Reservation, Outcome, error) {
+	if existing != nil {
+		return *existing, Replayed, nil
+	}
 	if candidate.Bytes <= 0 {
-		return ErrBytesNotPositive
+		return Reservation{}, 0, ErrBytesNotPositive
 	}
 	if !maxActive.Known {
-		return ErrLimitUnavailable
+		return Reservation{}, 0, ErrLimitUnavailable
 	}
 	if account.activeReservations >= maxActive.Value {
-		return TooManyActiveReservationsError{ActiveReservations: account.activeReservations, MaxActiveReservations: maxActive.Value}
+		return Reservation{}, 0, TooManyActiveReservationsError{ActiveReservations: account.activeReservations, MaxActiveReservations: maxActive.Value}
 	}
 	if candidate.Bytes > account.LimitBytes-account.reservedBytes {
-		return InsufficientStorageError{RequestedBytes: candidate.Bytes, AvailableBytes: account.AvailableBytes(), LimitBytes: account.LimitBytes}
+		return Reservation{}, 0, InsufficientStorageError{RequestedBytes: candidate.Bytes, AvailableBytes: account.AvailableBytes(), LimitBytes: account.LimitBytes}
 	}
 	account.reservedBytes += candidate.Bytes
 	account.activeReservations++
-	return nil
+	return candidate, Created, nil
 }

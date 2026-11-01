@@ -24,7 +24,7 @@ func TestService_PassesCurrentLimit(t *testing.T) {
 			accounts := &fakeAccountRepository{}
 			storage := New(accounts, testCase.limitProvider, time.Now)
 
-			_, err := storage.Reserve(t.Context(), "small_account", "key_1", 4194304)
+			_, _, err := storage.Reserve(t.Context(), "small_account", "key_1", 4194304)
 
 			if err != nil {
 				t.Fatalf("Reserve: unexpected error: %v", err)
@@ -41,7 +41,7 @@ func TestService_BuildsCandidate(t *testing.T) {
 	clockTime := time.Date(2026, 11, 1, 12, 0, 0, 123456789, time.FixedZone("CET", 3600))
 	storage := New(accounts, fakeLimitProvider{maxActive: 5, known: true}, fixedClock(clockTime))
 
-	reservation, err := storage.Reserve(t.Context(), "small_account", "key_1", 4194304)
+	reservation, _, err := storage.Reserve(t.Context(), "small_account", "key_1", 4194304)
 
 	if err != nil {
 		t.Fatalf("Reserve: unexpected error: %v", err)
@@ -66,7 +66,7 @@ func TestService_ReserveReturnsRepositoryErrors(t *testing.T) {
 	accounts := &fakeAccountRepository{reserveErr: domain.ErrAccountNotFound}
 	storage := New(accounts, fakeLimitProvider{maxActive: 5, known: true}, time.Now)
 
-	_, err := storage.Reserve(t.Context(), "unknown_account", "key_1", 4194304)
+	_, _, err := storage.Reserve(t.Context(), "unknown_account", "key_1", 4194304)
 
 	if !errors.Is(err, domain.ErrAccountNotFound) {
 		t.Errorf("Reserve on an unknown account: got error %v, want domain.ErrAccountNotFound", err)

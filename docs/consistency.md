@@ -81,10 +81,10 @@ CREATE TABLE settings (
 | `foreign_keys` | `ON` | Off by default in SQLite |
 
 ```
-file:/data/reserve.db?_txlock=immediate&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)
+/data/reserve.db?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=foreign_keys(1)
 ```
 
-With `modernc.org/sqlite`, `_pragma` values are applied to every connection the pool opens.
+With `modernc.org/sqlite`, `_pragma` values are applied to every connection the pool opens. `_txlock` is a driver option, not a pragma: every `BeginTx` then sends `BEGIN IMMEDIATE`, while a read-only transaction still sends a plain `BEGIN`.
 
 ## Reserve transaction
 
@@ -137,15 +137,17 @@ The space comes back only on a real `active → released` transition, so a secon
 
 Concurrent requests with different keys are not refused for being concurrent: parallel chunks and multiple devices are the normal case. They are processed one after the other, each against the real state.
 
-**Proved by.** `TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestReserveRelease_ConcurrentMix`.
+Measured before `_txlock=immediate` (T07): in WAL mode the limit was never exceeded, because a transaction that read an older snapshot cannot write. But 7 to 19 of 50 concurrent requests failed to upgrade their read lock to a write lock, with `SQLITE_BUSY`, and got `503` instead of their real answer: `busy_timeout` cannot help a transaction whose snapshot is stale. With `BEGIN IMMEDIATE`, each request waits for the lock, then reads the state left by the previous one.
+
+**Proved by.** `TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestAPI_ConcurrentReservations`, `TestReserveRelease_ConcurrentMix`.
 
 ### P2 — The response is lost and the client retries
 
 **Problem.** The reservation was committed but the client never got the response (timeout, network cut, crash after commit). A naive retry reserves the space twice and takes a second slot.
 
-**Solution.** The retry carries the same `Idempotency-Key`. Step 1 finds the reservation and returns it with `200` and `Idempotent-Replayed: true`: no extra bytes, no extra slot.
+**Solution.** The retry carries the same `Idempotency-Key`. The key lookup (step 2) finds the reservation and returns it in its current state, with `200` and `Idempotent-Replayed: true`: no extra bytes, no extra slot. A refused or failed attempt stores nothing, so its retry is evaluated again.
 
-**Proved by.** `TestReserve_RetryReturnsSameReservation`, `TestAPI_ReserveRetry`.
+**Proved by.** `TestAccount_Reserve`, `TestReserve_RetryReturnsSameReservation`, `TestReserve_RefusedAttemptIsNotRemembered`, `TestAPI_ReserveRetry`.
 
 ### P3 — The same request arrives twice at the same time
 
@@ -266,6 +268,8 @@ Every check runs in the handler, before the service is called, so an invalid req
 ### P15 — The client generates a new key for each retry
 
 The service cannot prevent this, because it cannot tell such a retry from a new request of the same size. The API contract tells clients to generate the key once per logical request ([api.md](api.md#idempotency)).
+
+**Proved by.** `TestReserve_DifferentKeysCreateDifferentReservations`: two keys give two reservations, as the contract says.
 
 ## Gaps that would block a production release
 
