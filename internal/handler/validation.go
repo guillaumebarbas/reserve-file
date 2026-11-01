@@ -10,10 +10,6 @@ import (
 
 const maxIdempotencyKeyLength = 255
 
-type reserveRequestBody struct {
-	Bytes json.RawMessage `json:"bytes"`
-}
-
 func validateIdempotencyKey(idempotencyKey string) error {
 	if idempotencyKey == "" {
 		return invalidIdempotencyKey("The Idempotency-Key header is required. Generate one key per logical request and reuse it on every retry.")

@@ -1,11 +1,16 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/guillaumebarbas/reserve-file/internal/domain"
 )
+
+type reserveRequestBody struct {
+	Bytes json.RawMessage `json:"bytes"`
+}
 
 type reservationBody struct {
 	ID         string     `json:"id"`
