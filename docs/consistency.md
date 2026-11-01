@@ -182,11 +182,11 @@ The guard is a convenience. The `UNIQUE (account_id, idempotency_key)` constrain
 
 **Solution.** `Account.Release` gives the space back only on a real `active → released` transition, and changes nothing on a reservation already released. The `UPDATE … WHERE status = 'active'` that saves it is a second guard. Later calls return `200` with the same body.
 
-An unknown reservation, or one owned by another account, gets `404` rather than `403`, so the service does not reveal that it exists.
+An unknown or malformed ID, or a reservation owned by another account, gets the same `404 reservation_not_found`, rather than a `403` or a `400`, so the service does not reveal that a reservation exists in another account. Nothing is written: the read is scoped by `account_id`, so the other account's reservation and counters are never touched.
 
 With `BEGIN IMMEDIATE`, the reservation is read under the write lock, so the second guard can only refuse a row that something else changed in between; `TestRelease_RollsBackWhenTheRowIsNotUpdated` simulates that with a trigger, and the whole release rolls back.
 
-**Proved by.** `TestAccount_ReleaseTwice`, `TestRelease_Twice`, `TestRelease_ConcurrentReleasesCreditOnce`, `TestReserveRelease_ConcurrentMix`, `TestRelease_RollsBackWhenTheRowIsNotUpdated`, `TestRelease_OtherAccountIsNotFound`, `TestAPI_ReleaseIdempotent`.
+**Proved by.** `TestAccount_ReleaseTwice`, `TestRelease_Twice`, `TestRelease_ConcurrentReleasesCreditOnce`, `TestReserveRelease_ConcurrentMix`, `TestRelease_RollsBackWhenTheRowIsNotUpdated`, `TestRelease_OtherAccountIsNotFound`, `TestGet_OtherAccountIsNotFound`, `TestAPI_ReleaseIdempotent`, `TestAPI_ReleaseUnknownAndForeignLookTheSame`.
 
 ### P7 — A limit drops below current usage
 
