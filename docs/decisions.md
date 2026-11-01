@@ -30,6 +30,7 @@ How they are implemented: [architecture.md](architecture.md) · [consistency.md]
 | D18 | Delivered with Docker Compose; tests and demo run in containers | Accepted |
 | D19 | Unit, integration and container tests; 100% coverage of the internal packages | Accepted |
 | D20 | A rich `Account` aggregate with private counters holds the business rules | Accepted |
+| D21 | List only the active reservations, oldest first, without pagination | Accepted |
 
 ## D1 — Standard library for HTTP, logs and configuration
 
@@ -295,6 +296,21 @@ In memory, the aggregate is the account row and, when needed, the one reservatio
 - A free decision function over a passive state (`DecideReserve(state, …)`), the previous design: as testable, but the rules sit apart from the data they protect, and nothing stops other code from changing the counters.
 - Encapsulating every type, `Reservation` included: an accessor for every field, Java-bean style, with no invariant to protect.
 - Loading all the reservations of an account: unbounded memory ([P14](consistency.md#p14--max_parallel_chunks-becomes-very-large)).
+
+## D21 — List only the active reservations, without pagination
+
+**Status:** Accepted
+
+**Decision.** `GET /accounts/{accountID}/reservations` answers `{"reservations": [...]}` with the account's active reservations, oldest first (`created_at`, then `id`), each with the body of a single read, and `[]` when none is active. The service checks the account first, so an unknown account gets `404 account_not_found`; the repository then lists in one `SELECT`. Nothing is written, so neither read runs in a transaction: accounts are never deleted, and one statement is consistent on its own.
+
+**Why.** Reservations do not expire ([G1](consistency.md#gaps-that-would-block-a-production-release)). A client that lost its reservation IDs, or an operator, needs to find the reservations that hold space and slots in order to release them. An account has at most `MAX_PARALLEL_CHUNKS` active reservations, a few more only after the limit was lowered, so one response holds them all. The brief does not ask for this endpoint: it was added at the end, as an extra.
+
+**Rejected.**
+- Listing released reservations too: they are history kept for replays, they grow without bound until a retention window exists ([G2](consistency.md#gaps-that-would-block-a-production-release)), and they would need pagination. They can come later as `?status=released` with a cursor, without changing this contract.
+- A bare JSON array: the object leaves room for a cursor.
+- Loading the list into the `Account` aggregate: its counters already summarize the reservations ([D5](#d5--usage-counters-on-the-account-row)), and no rule needs the list ([D20](#d20--a-rich-account-aggregate-with-private-counters)).
+
+**Limit.** The account filter uses the index of `UNIQUE (account_id, idempotency_key)`, so the query also reads the account's released rows; a partial index on the active rows would remove that cost if it ever mattered. If `MAX_PARALLEL_CHUNKS` became very large ([P14](consistency.md#p14--max_parallel_chunks-becomes-very-large)), this list would need pagination too.
 
 ## Patterns considered and not used
 

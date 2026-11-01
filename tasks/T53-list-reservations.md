@@ -17,12 +17,12 @@ Released reservations are not listed: they are history kept for idempotent repla
 
 ## Technical acceptance criteria
 
-- [ ] `200` with `{"reservations": [...]}`: the active reservations only, oldest first (`created_at`, then `id`), each with the same body as `GET` of one reservation.
-- [ ] No active reservation: `{"reservations": []}`, never `null`.
-- [ ] Unknown account: `404 account_not_found`; database failure: `503 service_unavailable`, with nothing else to unwrap.
-- [ ] Read-only: no transaction, no write, no call to `LimitProvider`. The `Account` aggregate is not loaded with its reservations (D5, D20).
-- [ ] No schema change: the account filter uses the index of `UNIQUE (account_id, idempotency_key)`.
-- [ ] `docs/api.md`, `api/openapi.yaml`, the README and decision D21 describe the endpoint.
+- [x] `200` with `{"reservations": [...]}`: the active reservations only, oldest first (`created_at`, then `id`), each with the same body as `GET` of one reservation.
+- [x] No active reservation: `{"reservations": []}`, never `null`.
+- [x] Unknown account: `404 account_not_found`; database failure: `503 service_unavailable`, with nothing else to unwrap.
+- [x] Read-only: no transaction, no write, no call to `LimitProvider`. The `Account` aggregate is not loaded with its reservations (D5, D20).
+- [x] No schema change: the account filter uses the index of `UNIQUE (account_id, idempotency_key)`.
+- [x] `docs/api.md`, `api/openapi.yaml`, the README and decision D21 describe the endpoint.
 
 ## User acceptance criteria
 
@@ -47,4 +47,14 @@ Integration (`internal/repository/sqlite`, `internal/handler`):
 
 ## Test results
 
-Not run yet.
+Run on 2026-11-01.
+
+- `gofmt -l .` prints nothing; `go vet ./...` passes; no comment in the Go code.
+- `go test ./...` (also with `-shuffle=on`): 167 tests and 199 subtests pass, none fail or skip; the seven tests of this ticket are new.
+- `docker compose run --rm test`: passes with the race detector; coverage of `./internal/...` is 100.0%.
+- `docker compose run --rm openapi-lint`: valid.
+- Failed first on an assertion: `TestService_ListActiveReservationsChecksTheAccount` and `TestListActiveReservations_OnlyActiveOldestFirst` (the stubs returned nothing), `TestAPI_ListActiveReservations` (`405`: the path only accepted `POST`), `TestAPI_ListActiveReservationsEmpty` (`{"reservations":null}`: a nil slice encodes as `null`).
+- Passed as soon as written, because Go had already forced the branches they cover: `TestListActiveReservations_DatabaseUnavailable`, `TestListActiveReservations_UnreadableRowFailsTheWholeList` and `TestAPI_ListActiveReservationsUnknownAccount`. Each one fails under a mutation of its branch: the driver error returned untranslated, an unreadable row skipped, or the service listing an unknown account.
+- `TestListActiveReservations_OnlyActiveOldestFirst` fails under each mutation of the query: without `ORDER BY`, with `ORDER BY id`, without the status filter, without the account filter.
+- `EXPLAIN QUERY PLAN` of the list: `SEARCH reservations USING INDEX sqlite_autoindex_reservations_2 (account_id=?)`, then `USE TEMP B-TREE FOR ORDER BY`.
+- Container, checked by hand on the local Compose stack: `[]` on an empty `small_account`; two reservations listed oldest first; after releasing the first, only the second; `404 account_not_found` for an unknown account; both released at the end. Swagger UI serves the new operation.

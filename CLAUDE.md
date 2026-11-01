@@ -5,7 +5,7 @@ Take-home exercise for Hivenet: a Go service that reserves storage space for upl
 ## Read before changing behaviour
 
 - `tasks/`: one ticket per step, in order, each with its acceptance criteria and the names of its tests. Ticket TNN is GitHub issue #NN; its state is the issue's `status:` label.
-- `docs/decisions.md`: decisions D1–D20 and their reasons. Do not contradict an Accepted decision without asking the user.
+- `docs/decisions.md`: decisions D1–D21 and their reasons. Do not contradict an Accepted decision without asking the user.
 - `docs/consistency.md`: invariants, reserve and release transactions, failure handling.
 - `docs/api.md`: the HTTP contract and the error catalogue.
 - `docs/architecture.md`: packages and the dependency rule.

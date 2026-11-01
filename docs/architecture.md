@@ -49,13 +49,15 @@ internal/
 │   ├── ports.go              AccountRepository, LimitProvider
 │   ├── service.go            Service, New
 │   ├── usage.go              Usage
-│   ├── reservation.go        Reserve, Release, Reservation
+│   ├── reservation.go        Reserve, ListActiveReservations
+│   ├── release.go            Release, Reservation
 │   └── inflight.go           in-flight Idempotency-Key guard
 ├── repository/sqlite/
 │   ├── schema.sql            embedded, versioned with PRAGMA user_version
 │   ├── db.go                 Open: DSN, pragmas, migration, account seeding
 │   ├── accounts.go           AccountRepository: loading and saving the Account aggregate
-│   └── reservations.go       the reserve and release transactions, driver error translation
+│   ├── reservations.go       the reserve transaction, the list of active reservations, driver error translation
+│   └── release.go            the release transaction, reading a reservation
 ├── limits/                   MAX_PARALLEL_CHUNKS: fetch, validate, cache, refresh, persist
 └── handler/                  routes, middleware, request/response DTOs, problem+json
 scripts/demo.sh               end-to-end demo: retry, concurrency, release
@@ -109,6 +111,9 @@ type AccountRepository interface {
     // saves what changed: one write transaction.
     Release(ctx context.Context, accountID, reservationID string, at time.Time) (domain.Reservation, error)
     Reservation(ctx context.Context, accountID, reservationID string) (domain.Reservation, error)
+    // ListActiveReservations reads the account's active reservations, oldest
+    // first, in one SELECT; the service checks the account before.
+    ListActiveReservations(ctx context.Context, accountID string) ([]domain.Reservation, error)
     Account(ctx context.Context, accountID string) (domain.Account, error)
 }
 
@@ -136,6 +141,10 @@ The signatures are indicative and will be settled during implementation. What wi
 One write transaction: load the account (unknown: `404 account_not_found`, as for reserve), then the reservation (unknown, or owned by another account: `404 reservation_not_found`), then `account.Release(&reservation, now)`. It marks the reservation released and gives its space back, or reports that it already was. Only when it changed, the repository writes the reservation and the counters. SQL in [consistency.md](consistency.md#release-transaction).
 
 Release involves neither the in-flight guard nor `LimitProvider`, so it works as long as the database does.
+
+### List active reservations
+
+The service reads the account (unknown: `404 account_not_found`), then the repository lists its active reservations, oldest first, in one `SELECT` filtered on the account and the status. Nothing is written, so neither read runs in a transaction: accounts are never deleted, and one statement is consistent on its own. Like release, the list involves neither the in-flight guard nor `LimitProvider`. The handler answers `{"reservations": [...]}` with the body of a single read for each item; it builds the list with `make`, so that an account without active reservations gets `[]`, not `null` ([D21](decisions.md#d21--list-only-the-active-reservations-without-pagination)).
 
 ### Usage
 

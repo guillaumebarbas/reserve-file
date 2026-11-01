@@ -24,7 +24,7 @@ servers:
 security: []
 tags:
   - name: Reservations
-    description: Reserve, read and release storage space.
+    description: Reserve, list, read and release storage space.
   - name: Usage
     description: The limit, the reserved space and the available space of an account.
   - name: Health
@@ -106,6 +106,32 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ReservationUnavailable"
+    get:
+      operationId: listActiveReservations
+      summary: List the active reservations
+      description: |
+        The account's active reservations, oldest first (`created_at`, then `id`), each with the body
+        of a single read, and an empty list when none is active. Released reservations are not listed.
+        There are at most `MAX_PARALLEL_CHUNKS` active reservations, so the list has no pagination.
+      tags: [Reservations]
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+      responses:
+        "200":
+          description: The active reservations, oldest first.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationList"
+        "404":
+          $ref: "#/components/responses/AccountNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /accounts/{accountID}/reservations/{reservationID}:
     get:
       operationId: readReservation
@@ -346,6 +372,15 @@ components:
           type: [string, "null"]
           format: date-time
           example: null
+    ReservationList:
+      type: object
+      required: [reservations]
+      properties:
+        reservations:
+          description: The active reservations, oldest first; empty when none is active.
+          type: array
+          items:
+            $ref: "#/components/schemas/Reservation"
     Usage:
       type: object
       required: [account_id, limit_bytes, reserved_bytes, available_bytes, active_reservations, max_active_reservations]

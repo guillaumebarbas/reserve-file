@@ -16,6 +16,7 @@
 | Method | Path | Purpose | Success |
 |---|---|---|---|
 | `POST` | `/accounts/{accountID}/reservations` | Reserve space | `201` new, `200` replay |
+| `GET` | `/accounts/{accountID}/reservations` | List the active reservations | `200` |
 | `GET` | `/accounts/{accountID}/reservations/{reservationID}` | Read a reservation | `200` |
 | `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation | `200` |
 | `GET` | `/accounts/{accountID}/usage` | Limit, reserved space and available space | `200` |
@@ -76,6 +77,34 @@ Keys are currently kept forever ([gap G2](consistency.md#gaps-that-would-block-a
 ## Read a reservation
 
 `GET /accounts/{accountID}/reservations/{reservationID}` returns `200` with the reservation body, or `404 reservation_not_found` if the ID is unknown or malformed, or if the reservation belongs to another account. The three cases get the same body, so the API never reveals that a reservation exists in another account.
+
+## List active reservations
+
+`GET /accounts/{accountID}/reservations` returns `200` with the account's active reservations, oldest first (`created_at`, then `id`), each with the same body as a single read ([D21](decisions.md#d21--list-only-the-active-reservations-without-pagination)).
+
+```sh
+curl -s http://localhost:8080/accounts/small_account/reservations
+```
+
+```json
+{
+  "reservations": [
+    {
+      "id": "01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f",
+      "account_id": "small_account",
+      "bytes": 4194304,
+      "status": "active",
+      "created_at": "2026-11-01T12:00:00Z",
+      "released_at": null
+    }
+  ]
+}
+```
+
+- **Active only:** released reservations are history kept for replays, and are not listed. An account has at most `MAX_PARALLEL_CHUNKS` active reservations, a few more only after the limit was lowered, so the list has no pagination.
+- **Empty:** `{"reservations": []}` when nothing is reserved.
+- **Use:** reservations do not expire ([gap G1](consistency.md#gaps-that-would-block-a-production-release)), so a client that lost its reservation IDs, or an operator, finds them here and releases them.
+- **Errors:** `404 account_not_found` for an unknown account, `503 service_unavailable` when the database fails.
 
 ## Release a reservation
 
