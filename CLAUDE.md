@@ -28,7 +28,7 @@ Take-home exercise for Hivenet: a Go service that reserves storage space for upl
 | Pull request that closes the issue | `/push-pr` | `status: validation` |
 | Review, tests, then merge or send back | `/review-task T06` | `status: validated` or `status: refused` |
 
-- Branch names follow Conventional Branch (`feat/t06-reserve`, listed in `tasks/README.md`); commit messages follow Conventional Commits (skill `conventional-commit`).
+- Branch names follow Conventional Branch (`feat/t06-reserve`, listed in `tasks/README.md`); commit messages follow Conventional Commits (skill `conventional-commit`), with no `Co-Authored-By` trailer.
 - Never commit on `main`. Commit and push only through `/push-code`.
 - Skills `clean-code`, `clean-architecture` and `go-best-practices`: the bar for readable, simple and minimal code, each with a checklist; loaded when planning, refactoring and reviewing.
 - GitHub operations (issues, labels, pull requests, project) go through the GitHub MCP server defined in `.mcp.json`: official image, authenticated with a personal access token read from the `GITHUB_MCP_PAT` environment variable (scopes `repo` and `project`), toolsets limited to `context,repos,issues,labels,pull_requests,projects`. No port is published, so every Claude Code session runs its own container. The server's OAuth login is not used: Claude Code cannot display its login URL. `gh` is the fallback.

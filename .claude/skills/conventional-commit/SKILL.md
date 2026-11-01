@@ -40,7 +40,7 @@ Refs: #<issue>
 ## Footer
 
 - `Refs: #<issue>`, the ticket's issue. Never `Closes`: the pull request closes the issue.
-- Then the co-author trailer Claude Code requires in this session, if any.
+- No `Co-Authored-By` trailer, at the user's request: the use of AI is described in the README instead.
 
 ## Granularity
 
