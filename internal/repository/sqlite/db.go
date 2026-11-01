@@ -13,7 +13,7 @@ import (
 //go:embed schema.sql
 var schema string
 
-const connectionSettings = "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=foreign_keys(1)"
+const connectionSettings = "?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=foreign_keys(1)"
 
 type Store struct {
 	database *sql.DB
