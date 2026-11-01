@@ -5,6 +5,9 @@ import (
 	"maps"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/guillaumebarbas/reserve-file/internal/limits"
 )
 
 func TestLoadConfig_Defaults(t *testing.T) {
@@ -41,6 +44,37 @@ func TestLoadConfig_SeedAccounts(t *testing.T) {
 	want := map[string]int64{"first_account": 100, "second_account": 200}
 	if !maps.Equal(got.SeedAccounts, want) {
 		t.Errorf("loadConfig(%v): SeedAccounts: got %v, want %v", environment, got.SeedAccounts, want)
+	}
+}
+
+func TestLoadConfig_EnvConfig(t *testing.T) {
+	testCases := []struct {
+		name        string
+		environment map[string]string
+		want        limits.Config
+	}{
+		{
+			name:        "defaults",
+			environment: map[string]string{},
+			want:        limits.Config{SourceURL: "https://env.hivenet.com/dev", FetchTimeout: 3 * time.Second, RefreshInterval: 60 * time.Second},
+		},
+		{
+			name:        "overrides",
+			environment: map[string]string{"ENV_CONFIG_URL": "http://localhost:9000/staging", "ENV_CONFIG_TIMEOUT": "500ms", "ENV_CONFIG_REFRESH": "5m"},
+			want:        limits.Config{SourceURL: "http://localhost:9000/staging", FetchTimeout: 500 * time.Millisecond, RefreshInterval: 5 * time.Minute},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := loadConfig(fakeEnvironment(testCase.environment))
+
+			if err != nil {
+				t.Fatalf("loadConfig(%v): unexpected error: %v", testCase.environment, err)
+			}
+			if got.LimitSource != testCase.want {
+				t.Errorf("loadConfig(%v): LimitSource: got %+v, want %+v", testCase.environment, got.LimitSource, testCase.want)
+			}
+		})
 	}
 }
 
@@ -89,6 +123,41 @@ func TestLoadConfig_InvalidValues(t *testing.T) {
 			name:         "seed_empty_account_id",
 			environment:  map[string]string{"SEED_ACCOUNTS": ":100"},
 			wantVariable: "SEED_ACCOUNTS",
+		},
+		{
+			name:         "limit_source_url_relative",
+			environment:  map[string]string{"ENV_CONFIG_URL": "env.hivenet.com/dev"},
+			wantVariable: "ENV_CONFIG_URL",
+		},
+		{
+			name:         "limit_source_url_not_http",
+			environment:  map[string]string{"ENV_CONFIG_URL": "ftp://env.hivenet.com/dev"},
+			wantVariable: "ENV_CONFIG_URL",
+		},
+		{
+			name:         "limit_source_url_unparsable",
+			environment:  map[string]string{"ENV_CONFIG_URL": "http://[::1"},
+			wantVariable: "ENV_CONFIG_URL",
+		},
+		{
+			name:         "limit_refresh_not_a_duration",
+			environment:  map[string]string{"ENV_CONFIG_REFRESH": "sixty"},
+			wantVariable: "ENV_CONFIG_REFRESH",
+		},
+		{
+			name:         "limit_refresh_zero",
+			environment:  map[string]string{"ENV_CONFIG_REFRESH": "0s"},
+			wantVariable: "ENV_CONFIG_REFRESH",
+		},
+		{
+			name:         "limit_timeout_without_unit",
+			environment:  map[string]string{"ENV_CONFIG_TIMEOUT": "3"},
+			wantVariable: "ENV_CONFIG_TIMEOUT",
+		},
+		{
+			name:         "limit_timeout_negative",
+			environment:  map[string]string{"ENV_CONFIG_TIMEOUT": "-1s"},
+			wantVariable: "ENV_CONFIG_TIMEOUT",
 		},
 	}
 	for _, testCase := range testCases {

@@ -4,8 +4,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/url"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/guillaumebarbas/reserve-file/internal/limits"
 )
 
 type Config struct {
@@ -13,6 +17,7 @@ type Config struct {
 	LogLevel     slog.Level
 	DatabasePath string
 	SeedAccounts map[string]int64
+	LimitSource  limits.Config
 }
 
 func loadConfig(getEnvironmentVariable func(string) string) (Config, error) {
@@ -48,7 +53,55 @@ func loadConfig(getEnvironmentVariable func(string) string) (Config, error) {
 		config.SeedAccounts = accounts
 	}
 
+	limitSource, err := loadLimitSourceConfig(getEnvironmentVariable)
+	if err != nil {
+		return Config{}, err
+	}
+	config.LimitSource = limitSource
+
 	return config, nil
+}
+
+func loadLimitSourceConfig(getEnvironmentVariable func(string) string) (limits.Config, error) {
+	limitSource := limits.Config{
+		SourceURL:       "https://env.hivenet.com/dev",
+		FetchTimeout:    3 * time.Second,
+		RefreshInterval: 60 * time.Second,
+	}
+	if sourceURL := getEnvironmentVariable("ENV_CONFIG_URL"); sourceURL != "" {
+		if !isAbsoluteHTTPURL(sourceURL) {
+			return limits.Config{}, fmt.Errorf("ENV_CONFIG_URL: %q is not an absolute http or https URL", sourceURL)
+		}
+		limitSource.SourceURL = sourceURL
+	}
+	if refreshInterval := getEnvironmentVariable("ENV_CONFIG_REFRESH"); refreshInterval != "" {
+		duration, err := parsePositiveDuration(refreshInterval)
+		if err != nil {
+			return limits.Config{}, fmt.Errorf("ENV_CONFIG_REFRESH: %w", err)
+		}
+		limitSource.RefreshInterval = duration
+	}
+	if fetchTimeout := getEnvironmentVariable("ENV_CONFIG_TIMEOUT"); fetchTimeout != "" {
+		duration, err := parsePositiveDuration(fetchTimeout)
+		if err != nil {
+			return limits.Config{}, fmt.Errorf("ENV_CONFIG_TIMEOUT: %w", err)
+		}
+		limitSource.FetchTimeout = duration
+	}
+	return limitSource, nil
+}
+
+func isAbsoluteHTTPURL(text string) bool {
+	parsedURL, err := url.Parse(text)
+	return err == nil && (parsedURL.Scheme == "http" || parsedURL.Scheme == "https") && parsedURL.Host != ""
+}
+
+func parsePositiveDuration(text string) (time.Duration, error) {
+	duration, err := time.ParseDuration(text)
+	if err != nil || duration <= 0 {
+		return 0, fmt.Errorf("%q is not a positive duration such as 60s", text)
+	}
+	return duration, nil
 }
 
 func parseSeedAccounts(seedAccounts string) (map[string]int64, error) {
