@@ -74,7 +74,7 @@ Keys are currently kept forever ([gap G2](consistency.md#gaps-that-would-block-a
 
 ## Read a reservation
 
-`GET /accounts/{accountID}/reservations/{reservationID}` returns `200` with the reservation body, or `404 reservation_not_found` if it does not exist or belongs to another account.
+`GET /accounts/{accountID}/reservations/{reservationID}` returns `200` with the reservation body, or `404 reservation_not_found` if the ID is unknown or malformed, or if the reservation belongs to another account. The three cases get the same body, so the API never reveals that a reservation exists in another account.
 
 ## Release a reservation
 
@@ -94,7 +94,7 @@ curl -i -X POST http://localhost:8080/accounts/large_account/reservations/01a196
 ```
 
 - **Idempotent:** repeating the call returns `200` and the same body. The space is given back once.
-- **Not found:** `404 reservation_not_found` for an unknown reservation or one owned by another account; `404 account_not_found` for an unknown account, as for reserve and usage.
+- **Not found:** `404 reservation_not_found` for an unknown or malformed ID, or a reservation owned by another account, with the same body in every case and nothing written; `404 account_not_found` for an unknown account, as for reserve and usage.
 - **Independent of `MAX_PARALLEL_CHUNKS`:** release works even when the limit source is down.
 
 ## Usage
