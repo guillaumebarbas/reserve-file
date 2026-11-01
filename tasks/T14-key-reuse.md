@@ -15,7 +15,7 @@ Case: a client bug reuses a known `Idempotency-Key` with another size. Returning
 
 ## Technical acceptance criteria
 
-- [ ] Same key, different `bytes`: `422 idempotency_key_reused` with `original_bytes`. Nothing is written.
+- [x] Same key, different `bytes`: `422 idempotency_key_reused` with `original_bytes`. Nothing is written.
 
 ## User acceptance criteria
 
@@ -26,12 +26,21 @@ The user is a client application. Account `small_account`.
 ## Tests
 
 Unit (`internal/domain`):
-- [ ] `TestAccount_Reserve` — adds: an existing key with different bytes gives `IdempotencyKeyReusedError`.
+- [x] `TestAccount_Reserve` — adds: an existing key with different bytes gives `IdempotencyKeyReusedError`, and the key reuse is reported before every admission rule (limit unknown, slots full, no space).
 
 Integration (`internal/repository/sqlite`, `internal/handler`):
-- [ ] `TestReserve_KeyReuseWithDifferentBytes`
-- [ ] `TestAPI_KeyReuseWithDifferentBytes` — `422`, `original_bytes`, message.
+- [x] `TestReserve_KeyReuseWithDifferentBytes` — the error carries the original 31457280 bytes; one row, counters unchanged, invariants hold.
+- [x] `TestAPI_KeyReuseWithDifferentBytes` — `422`, `original_bytes`, message; usage unchanged.
 
 ## Test results
 
-_Not run yet._
+Run on 2026-11-01.
+
+- `gofmt -l .` prints nothing; `go vet ./...` passes.
+- `go test ./...` (also with `-shuffle=on`): 108 tests and 163 subtests pass, none fail or skip; every package is at 100% on its own.
+- `docker compose run --rm test`: passes with the race detector; coverage of `./internal/...` is 100.0%.
+- Test first:
+  - the two new rows of `TestAccount_Reserve` failed first: the existing reservation was replayed (outcome 2) whatever its size;
+  - `TestReserve_KeyReuseWithDifferentBytes` passed at once, because the domain rule already existed. It failed with the rule removed ("got error <nil>, want idempotency key reused"), then passed again once restored;
+  - `TestAPI_KeyReuseWithDifferentBytes` was written while the rule was removed and failed: the second request got `200` with the 30 MiB reservation. It passes with the rule.
+- Container, checked by hand on a separate Compose project, removed afterwards: `small_account` reserves 30 MiB with a key (`201`), then the same key with 31 MiB gets `422 idempotency_key_reused` in `application/problem+json`, with `original_bytes: 31457280` and the api.md detail; usage stays at 31457280 bytes and 1 active reservation.
