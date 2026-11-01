@@ -25,7 +25,7 @@ If no target is given, reply "Please choose a ticket or a pull request." followe
 5. Check, with evidence (test names, `file:line`):
    - every technical and user acceptance criterion of the ticket is met;
    - every test listed in the ticket exists, tests what its name says, and passes;
-   - the architecture and Go style rules, and the checklist of the `go-best-practices` skill;
+   - the architecture and Go style rules, and the checklists of the `clean-code`, `clean-architecture` and `go-best-practices` skills;
    - the non-negotiables of `CLAUDE.md`: one transaction per operation, idempotency checked first, counters changed with the row, no SQLite error leaking, nothing secret logged;
    - the ticket's **Test results** and the docs are up to date;
    - nothing outside the ticket's scope.

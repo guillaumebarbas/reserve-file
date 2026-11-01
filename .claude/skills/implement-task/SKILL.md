@@ -28,7 +28,7 @@ No file is created or modified in this phase.
 
 1. Read the ticket and the docs it references.
 2. Read the code the ticket will touch: packages, types, functions, existing tests. Note what exists and what is missing.
-3. Load the `go-best-practices` skill.
+3. Load the `clean-code`, `clean-architecture` and `go-best-practices` skills. They set the bar for the whole ticket: readable, understandable, simple and minimal code.
 
 ## 2. Propose a plan
 
@@ -37,7 +37,7 @@ Write it in French, under these headings:
 - **Existing code**: what is already there and will be reused.
 - **Files**: each file to create or modify, with one line on why.
 - **Tests in order**: the ticket's tests in the order they will be written, one TDD cycle each, simplest first, with the code each test will force into existence.
-- **Watch points**: the decisions and Go practices that apply, the risks, the Go constructs that will appear for the first time.
+- **Watch points**: the decisions, the layers and boundaries involved, the Go practices that apply, the risks, and the Go constructs that will appear for the first time.
 - **Questions**: anything unclear in the ticket.
 
 Ask the user to validate the plan and wait. Revise it until they approve it. If they decline, stop.
@@ -52,7 +52,7 @@ Ask the user to validate the plan and wait. Revise it until they approve it. If 
 ## 4. Implement, one validated step at a time
 
 1. **Test file**: create the test file with the first test of the plan only, and the helpers it needs. No production code. Show it, explain it in French, and wait for validation. The Red step of this first cycle then only adds the compile stub and runs the test.
-2. For each test, follow the `tdd` skill. Each of its steps (Red, Green, Refactor, close of the cycle) ends with a stop: show what was done, explain it in French, and wait for the user's validation. At the Refactor step, also check the code against the `go-best-practices` checklist.
+2. For each test, follow the `tdd` skill. Each of its steps (Red, Green, Refactor, close of the cycle) ends with a stop: show what was done, explain it in French, and wait for the user's validation. At the Refactor step, also check the code against the checklists of `clean-code`, `clean-architecture` and `go-best-practices`.
 3. Write one test at a time. Never write production code that the current test does not require.
 4. At the end of a cycle, remind the user that `/push-code` commits it.
 5. If the user edits the code or changes direction, adapt and say what changes in the plan.
