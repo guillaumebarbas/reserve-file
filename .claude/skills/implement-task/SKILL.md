@@ -19,7 +19,7 @@ Ticket TNN is GitHub issue #NN, and its branch is listed in `tasks/README.md`. T
 - Unknown ticket: reply "Ticket <ID> not found. Please choose a ticket." followed by the same list, then stop.
 - Issue closed or labelled `status: validated`: say the ticket is done and stop, unless the user asks to reopen it.
 - Labelled `status: validation`: a pull request is waiting for review; suggest `/review-task <ID>` and stop.
-- Labelled `status: refused`: read the review comments on its pull request; the plan starts from them.
+- Labelled `status: refused`: read the unresolved review threads of its pull request, including those of bots. Each one becomes a step of the plan, fixed in TDD when it changes behaviour.
 - A ticket it depends on is not validated: name it and ask whether to continue anyway.
 
 ## 1. Understand
