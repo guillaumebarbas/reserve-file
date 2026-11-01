@@ -8,6 +8,7 @@ services:
       # Empty unless set in the shell or in .env: the service then seeds its default accounts.
       SEED_ACCOUNTS: ${SEED_ACCOUNTS:-}
       ENV_CONFIG_URL: ${ENV_CONFIG_URL:-https://env.hivenet.com/dev}
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-}
     volumes:
       - data:/data
     healthcheck:
@@ -47,6 +48,24 @@ services:
     volumes:
       - ./scripts:/scripts:ro
     entrypoint: ["sh", "/scripts/demo.sh"]
+
+  docs:
+    profiles: ["docs"]
+    image: swaggerapi/swagger-ui:v5.34.1@sha256:59ee9021a8884437c7fd8aae79e0a46ee6b6dd3afd7f24a587c4501585fde53b
+    ports:
+      - "${DOCS_PORT:-8081}:8080"
+    environment:
+      SWAGGER_JSON: /api/openapi.yaml
+    volumes:
+      - ./api:/api:ro
+
+  openapi-lint:
+    profiles: ["lint"]
+    image: redocly/cli:2.72.1@sha256:d39a229ebd8250fea62f44c377ddb04797e8a155140eda49db17f1caaa9334ff
+    working_dir: /api
+    volumes:
+      - ./api:/api:ro
+    command: ["lint", "openapi.yaml"]
 
 volumes:
   data:

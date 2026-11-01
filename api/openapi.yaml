@@ -1,0 +1,691 @@
+openapi: 3.1.0
+info:
+  title: reserve-file
+  version: 1.0.0
+  summary: Reserve storage space for uploads, release it, and read what an account has left.
+  description: |
+    A client reserves bytes before it uploads, releases them when it no longer needs them,
+    and reads how much space its account has left.
+
+    - Sizes are integers in bytes; timestamps are RFC 3339 in UTC; reservation IDs are UUIDv7 strings.
+    - There is no authentication: the account is taken from the path.
+    - Every response carries an `X-Request-Id` header, also written on every log line of the request.
+    - Errors are `application/problem+json` (RFC 9457) with a stable `code`; clients branch on `code`,
+      `detail` is written for humans and may change.
+
+    The prose contract, with the retry rules, is [docs/api.md](https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md).
+servers:
+  - url: http://localhost:{port}
+    description: The Compose stack on this machine
+    variables:
+      port:
+        default: "8080"
+        description: The host port of the api service, API_PORT in Compose.
+security: []
+tags:
+  - name: Reservations
+    description: Reserve, read and release storage space.
+  - name: Usage
+    description: The limit, the reserved space and the available space of an account.
+  - name: Health
+    description: Liveness and readiness probes.
+paths:
+  /accounts/{accountID}/reservations:
+    post:
+      operationId: reserve
+      summary: Reserve space
+      description: |
+        Reserves the requested bytes if they fit the account's storage limit and one of its
+        `MAX_PARALLEL_CHUNKS` slots is free.
+
+        The `Idempotency-Key` is looked up first. The same key with the same size replays the
+        stored reservation in its current state (`200`, `Idempotent-Replayed: true`), without
+        reserving twice or using a second slot. The same key with another size is refused
+        (`422`). A refused or failed attempt stores nothing, so the same key can succeed later.
+      tags: [Reservations]
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        description: At most 4 KiB. Unknown fields and trailing data are rejected.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReserveRequest"
+            example:
+              bytes: 4194304
+      responses:
+        "201":
+          description: Reserved.
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+              example:
+                id: 01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f
+                account_id: large_account
+                bytes: 4194304
+                status: active
+                created_at: "2026-11-01T12:00:00Z"
+                released_at: null
+        "200":
+          description: A retry with a known key and the same size; the reservation in its current state, which may be `released`.
+          headers:
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+              example:
+                id: 01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f
+                account_id: large_account
+                bytes: 4194304
+                status: active
+                created_at: "2026-11-01T12:00:00Z"
+                released_at: null
+        "400":
+          $ref: "#/components/responses/InvalidReserveRequest"
+        "404":
+          $ref: "#/components/responses/AccountNotFound"
+        "409":
+          $ref: "#/components/responses/ReservationRefused"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "422":
+          $ref: "#/components/responses/IdempotencyKeyReused"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ReservationUnavailable"
+  /accounts/{accountID}/reservations/{reservationID}:
+    get:
+      operationId: readReservation
+      summary: Read a reservation
+      description: Returns the reservation as stored. A reservation of another account is not found, so its existence is never revealed.
+      tags: [Reservations]
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - $ref: "#/components/parameters/ReservationID"
+      responses:
+        "200":
+          description: The reservation.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+        "404":
+          $ref: "#/components/responses/ReservationNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /accounts/{accountID}/reservations/{reservationID}/release:
+    post:
+      operationId: releaseReservation
+      summary: Release a reservation
+      description: |
+        Gives the reservation's space and slot back. Repeating the call, even at the same time,
+        returns `200` and the same body, `released_at` included: the space comes back once.
+        Release never needs `MAX_PARALLEL_CHUNKS`, so it works while the limit source is down.
+      tags: [Reservations]
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - $ref: "#/components/parameters/ReservationID"
+      responses:
+        "200":
+          description: The reservation, now released.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+              example:
+                id: 01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f
+                account_id: large_account
+                bytes: 4194304
+                status: released
+                created_at: "2026-11-01T12:00:00Z"
+                released_at: "2026-11-01T12:03:10Z"
+        "404":
+          $ref: "#/components/responses/AccountOrReservationNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /accounts/{accountID}/usage:
+    get:
+      operationId: readUsage
+      summary: Read an account's usage
+      description: |
+        `available_bytes` is `max(0, limit_bytes - reserved_bytes)`. After a limit is lowered,
+        `reserved_bytes` may exceed `limit_bytes` and `active_reservations` may exceed
+        `max_active_reservations`: nothing is revoked.
+      tags: [Usage]
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+      responses:
+        "200":
+          description: The account's usage.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Usage"
+              example:
+                account_id: large_account
+                limit_bytes: 10737418240
+                reserved_bytes: 4194304
+                available_bytes: 10733223936
+                active_reservations: 1
+                max_active_reservations: 5
+        "404":
+          $ref: "#/components/responses/AccountNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /healthz:
+    get:
+      operationId: checkLiveness
+      summary: Liveness
+      description: Answers as long as the process serves HTTP.
+      tags: [Health]
+      responses:
+        "200":
+          description: The process serves HTTP.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Liveness"
+  /readyz:
+    get:
+      operationId: checkReadiness
+      summary: Readiness
+      description: |
+        `503` only when the database does not answer. An unknown limit does not fail readiness,
+        because release, usage and replays still work: `limits` is then `unavailable`.
+      tags: [Health]
+      responses:
+        "200":
+          description: The database answers.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+              example:
+                database: ok
+                limits: ok
+        "503":
+          description: The database does not answer; the cause is in the server log, with the request ID.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+              example:
+                database: unavailable
+                limits: ok
+components:
+  parameters:
+    AccountID:
+      name: accountID
+      in: path
+      required: true
+      description: The account, as seeded at startup.
+      schema:
+        type: string
+        minLength: 1
+      example: small_account
+    ReservationID:
+      name: reservationID
+      in: path
+      required: true
+      description: A reservation ID returned by reserve, a UUIDv7 string.
+      schema:
+        type: string
+        minLength: 1
+      example: 01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Generated once per logical request and sent on every retry; a new request takes a new key.
+        A random UUID is recommended. Scope: the account. It grants no access.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+        pattern: "^[!-~]+$"
+      example: 9b2f4c1e-5a43-4f7e-9d0a-2f7c1b8e4d21
+  headers:
+    RequestID:
+      description: 16 hexadecimal characters, generated per request and written on every log line of the request.
+      schema:
+        type: string
+        pattern: "^[0-9a-f]{16}$"
+      example: c0a8f3e2b71d4e5f
+    Location:
+      description: The path of the new reservation.
+      schema:
+        type: string
+      example: /accounts/large_account/reservations/01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f
+    IdempotentReplayed:
+      description: Present on a replay; the reservation was made by an earlier request with the same key.
+      schema:
+        type: string
+        const: "true"
+    RetryAfter:
+      description: Seconds to wait before retrying with the same Idempotency-Key.
+      schema:
+        type: integer
+        minimum: 1
+      example: 1
+  schemas:
+    ReserveRequest:
+      type: object
+      additionalProperties: false
+      required: [bytes]
+      properties:
+        bytes:
+          description: A JSON integer. Decimals (`5.5`, `5.0`), exponents and strings are rejected.
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9223372036854775807
+          example: 4194304
+    Reservation:
+      type: object
+      required: [id, account_id, bytes, status, created_at, released_at]
+      properties:
+        id:
+          description: UUIDv7.
+          type: string
+          example: 01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f
+        account_id:
+          type: string
+          example: large_account
+        bytes:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 4194304
+        status:
+          type: string
+          enum: [active, released]
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-11-01T12:00:00Z"
+        released_at:
+          description: When the reservation was released; `null` while it is active.
+          type: [string, "null"]
+          format: date-time
+          example: null
+    Usage:
+      type: object
+      required: [account_id, limit_bytes, reserved_bytes, available_bytes, active_reservations, max_active_reservations]
+      properties:
+        account_id:
+          type: string
+          example: large_account
+        limit_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          example: 10737418240
+        reserved_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          example: 4194304
+        available_bytes:
+          description: "`max(0, limit_bytes - reserved_bytes)`."
+          type: integer
+          format: int64
+          minimum: 0
+          example: 10733223936
+        active_reservations:
+          type: integer
+          minimum: 0
+          example: 1
+        max_active_reservations:
+          description: The current `MAX_PARALLEL_CHUNKS`; `null` while it has never been obtained.
+          type: [integer, "null"]
+          minimum: 1
+          example: 5
+    Liveness:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+    Readiness:
+      type: object
+      required: [database, limits]
+      properties:
+        database:
+          type: string
+          enum: [ok, unavailable]
+        limits:
+          description: "`unavailable` while `MAX_PARALLEL_CHUNKS` has never been obtained."
+          type: string
+          enum: [ok, unavailable]
+    Problem:
+      description: RFC 9457 problem details. The extension fields appear only with the codes that carry them.
+      type: object
+      required: [type, title, status, code, detail, request_id]
+      properties:
+        type:
+          description: The code's entry in docs/api.md.
+          type: string
+          format: uri
+          example: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#insufficient_storage
+        title:
+          type: string
+          example: Insufficient storage
+        status:
+          type: integer
+          example: 409
+        code:
+          description: Stable; clients branch on it.
+          type: string
+          enum:
+            - invalid_request
+            - invalid_idempotency_key
+            - account_not_found
+            - reservation_not_found
+            - request_in_progress
+            - too_many_active_reservations
+            - insufficient_storage
+            - request_too_large
+            - idempotency_key_reused
+            - limit_unavailable
+            - service_unavailable
+            - internal_error
+        detail:
+          description: Written for humans, with the numbers and the next step; it may change.
+          type: string
+        request_id:
+          description: The request's X-Request-Id, which links the response to the server log.
+          type: string
+          example: c0a8f3e2b71d4e5f
+        requested_bytes:
+          description: With `insufficient_storage`.
+          type: integer
+          format: int64
+        available_bytes:
+          description: With `insufficient_storage`; 0 when the account is full.
+          type: integer
+          format: int64
+        limit_bytes:
+          description: With `insufficient_storage`.
+          type: integer
+          format: int64
+        active_reservations:
+          description: With `too_many_active_reservations`.
+          type: integer
+        max_active_reservations:
+          description: With `too_many_active_reservations`.
+          type: integer
+        original_bytes:
+          description: With `idempotency_key_reused`, the size the key first reserved.
+          type: integer
+          format: int64
+  responses:
+    InvalidReserveRequest:
+      description: The body or the Idempotency-Key header is invalid. Nothing reached the database.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            invalid_request:
+              summary: bytes is not a positive 64-bit integer
+              value:
+                type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#invalid_request
+                title: Invalid request
+                status: 400
+                code: invalid_request
+                detail: bytes must be a positive integer, got 5.5.
+                request_id: 3f9a1c0d7b2e4a65
+            invalid_idempotency_key:
+              summary: The Idempotency-Key header is missing
+              value:
+                type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#invalid_idempotency_key
+                title: Invalid idempotency key
+                status: 400
+                code: invalid_idempotency_key
+                detail: The Idempotency-Key header is required. Generate one key per logical request and reuse it on every retry.
+                request_id: 3f9a1c0d7b2e4a65
+    AccountNotFound:
+      description: The account does not exist.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#account_not_found
+            title: Account not found
+            status: 404
+            code: account_not_found
+            detail: Account 'unknown_account' does not exist.
+            request_id: 5b1e6f0a2c9d4387
+    ReservationNotFound:
+      description: The reservation does not exist, or belongs to another account.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#reservation_not_found
+            title: Reservation not found
+            status: 404
+            code: reservation_not_found
+            detail: Reservation '01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f' does not exist for account 'large_account'.
+            request_id: 5b1e6f0a2c9d4387
+    AccountOrReservationNotFound:
+      description: The account does not exist, or the reservation does not exist or belongs to another account.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            reservation_not_found:
+              summary: Unknown reservation, or one of another account
+              value:
+                type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#reservation_not_found
+                title: Reservation not found
+                status: 404
+                code: reservation_not_found
+                detail: Reservation '01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f' does not exist for account 'large_account'.
+                request_id: 5b1e6f0a2c9d4387
+            account_not_found:
+              summary: Unknown account
+              value:
+                type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#account_not_found
+                title: Account not found
+                status: 404
+                code: account_not_found
+                detail: Account 'unknown_account' does not exist.
+                request_id: 5b1e6f0a2c9d4387
+    ReservationRefused:
+      description: |
+        Refused because of the current state; the same request can succeed later.
+        `request_in_progress` comes with `Retry-After: 1`.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+        X-Request-Id:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            insufficient_storage:
+              summary: Not enough space left
+              value:
+                type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#insufficient_storage
+                title: Insufficient storage
+                status: 409
+                code: insufficient_storage
+                detail: Requested 5.00 GiB but only 1.20 GiB is available (limit 10.00 GiB). Release a reservation or request less space.
+                requested_bytes: 5368709120
+                available_bytes: 1288490189
+                limit_bytes: 10737418240
+                request_id: c0a8f3e2b71d4e5f
+            too_many_active_reservations:
+              summary: Every MAX_PARALLEL_CHUNKS slot is used
+              value:
+                type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#too_many_active_reservations
+                title: Too many active reservations
+                status: 409
+                code: too_many_active_reservations
+                detail: You have 5 active reservations and the maximum is 5. Release a reservation before creating a new one.
+                active_reservations: 5
+                max_active_reservations: 5
+                request_id: c0a8f3e2b71d4e5f
+            request_in_progress:
+              summary: The same key is still being processed
+              value:
+                type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#request_in_progress
+                title: Request in progress
+                status: 409
+                code: request_in_progress
+                detail: A request with this Idempotency-Key is still being processed. Retry in a moment to get its result.
+                request_id: c0a8f3e2b71d4e5f
+    RequestTooLarge:
+      description: The body exceeds 4 KiB.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#request_too_large
+            title: Request too large
+            status: 413
+            code: request_too_large
+            detail: The request body must not exceed 4096 bytes.
+            request_id: 7d2c4b9e0f1a3856
+    IdempotencyKeyReused:
+      description: The key was already used to reserve another size; retrying will never succeed. Nothing is written.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#idempotency_key_reused
+            title: Idempotency key reused
+            status: 422
+            code: idempotency_key_reused
+            detail: This Idempotency-Key was already used to reserve 4194304 bytes. Use a new key for a new request.
+            original_bytes: 4194304
+            request_id: 2a8f5d1c6e0b4973
+    InternalError:
+      description: An unexpected error. The body never contains internal text; the request ID leads to the error in the server log.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#internal_error
+            title: Internal error
+            status: 500
+            code: internal_error
+            detail: "An unexpected error occurred. Reference: c0a8f3e2b71d4e5f."
+            request_id: c0a8f3e2b71d4e5f
+    ReservationUnavailable:
+      description: A temporary server-side condition; retry with the same Idempotency-Key after `Retry-After` seconds.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+        X-Request-Id:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            limit_unavailable:
+              summary: MAX_PARALLEL_CHUNKS has never been obtained (Retry-After 5)
+              value:
+                type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#limit_unavailable
+                title: Limit unavailable
+                status: 503
+                code: limit_unavailable
+                detail: Reservation limits are temporarily unavailable. Retry later; releases are not affected.
+                request_id: 9e4b2a7c1d0f5863
+            service_unavailable:
+              summary: The database is busy or unavailable (Retry-After 1)
+              value:
+                type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#service_unavailable
+                title: Service unavailable
+                status: 503
+                code: service_unavailable
+                detail: The service is temporarily unavailable. Retry with the same Idempotency-Key.
+                request_id: 9e4b2a7c1d0f5863
+    ServiceUnavailable:
+      description: The database is busy or unavailable; retry after `Retry-After` seconds.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+        X-Request-Id:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://github.com/guillaumebarbas/reserve-file/blob/main/docs/api.md#service_unavailable
+            title: Service unavailable
+            status: 503
+            code: service_unavailable
+            detail: The service is temporarily unavailable. Retry with the same Idempotency-Key.
+            request_id: 9e4b2a7c1d0f5863
