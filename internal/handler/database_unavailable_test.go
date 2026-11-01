@@ -31,6 +31,7 @@ func TestAPI_DatabaseClosedReturns503(t *testing.T) {
 		{"reserve", http.MethodPost, "/accounts/small_account/reservations", "key_2", `{"bytes": 1048576}`},
 		{"release", http.MethodPost, "/accounts/small_account/reservations/" + reservationID + "/release", "", ""},
 		{"read_reservation", http.MethodGet, "/accounts/small_account/reservations/" + reservationID, "", ""},
+		{"list_active_reservations", http.MethodGet, "/accounts/small_account/reservations", "", ""},
 		{"usage", http.MethodGet, "/accounts/small_account/usage", "", ""},
 	}
 	for _, testCase := range testCases {
