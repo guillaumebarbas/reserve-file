@@ -54,12 +54,10 @@ start := make(chan struct{})
 var wg sync.WaitGroup
 errs := make([]error, n)
 for i := range n {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		<-start // all goroutines are released together
 		_, _, errs[i] = repo.Reserve(ctx, "acc", fmt.Sprintf("key-%d", i), candidate(i), decide)
-	}()
+	})
 }
 close(start)
 wg.Wait()

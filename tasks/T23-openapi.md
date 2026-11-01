@@ -22,7 +22,7 @@ A machine-readable description of the API and an interactive page to browse and 
 
 - [ ] `api/openapi.yaml` describes every endpoint, the headers (`Idempotency-Key`, `Idempotent-Replayed`, `Location`, `Retry-After`, `X-Request-Id`), the bodies, and every error code of api.md as `application/problem+json`.
 - [ ] The file passes a linter run in Docker (`redocly/cli lint`).
-- [ ] A `docs` Compose profile starts `swaggerapi/swagger-ui` on port 8081 with this file.
+- [ ] A `docs` Compose profile starts `swaggerapi/swagger-ui` on host port `${DOCS_PORT:-8081}` with this file.
 - [ ] "Try it out" works against the running service: the API allows the Swagger UI origin through CORS, configured with `CORS_ALLOWED_ORIGIN` and off by default.
 - [ ] api.md points to the OpenAPI file, and the two stay consistent.
 

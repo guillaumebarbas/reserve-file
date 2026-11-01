@@ -10,7 +10,8 @@ Reference: `docs/consistency.md` (data model, transactions, SQLite configuration
 
 - `database/sql` with handwritten SQL. No ORM, no query builder.
 - Values always go through placeholders (`?`), never through string concatenation.
-- Every write runs in one transaction opened with `BeginTx` (the DSN sets `_txlock=immediate`, so it is `BEGIN IMMEDIATE`). `defer tx.Rollback()` right after opening it; `tx.Commit()` at the end.
+- Every write runs in one transaction opened with `BeginTx` (the DSN sets `_txlock=immediate`, so it is `BEGIN IMMEDIATE`). `defer tx.Rollback()` right after opening it; `tx.Commit()` at the end. The deferred Rollback's error is ignored on purpose: after a successful Commit it is always `sql.ErrTxDone`. It is the only error ignored without `_ =`.
+- Scan rows into local variables and build domain values from them: nullable columns go through `sql.NullInt64`, timestamps are converted to UTC `time.Time`. No `db` tags on domain types.
 - Read the state and write it in the same transaction. No network call and no sleep inside a transaction.
 - Use `RETURNING` and affected-row counts to know what a statement did; never re-read to guess.
 - Account counters change only in the transaction that changes the reservation row, and only when that row actually changed state.
@@ -18,7 +19,7 @@ Reference: `docs/consistency.md` (data model, transactions, SQLite configuration
 - `defer rows.Close()` after every `QueryContext`, and check `rows.Err()` after the loop.
 - Translate errors before returning them:
   - `sql.ErrNoRows` → the matching domain not-found error;
-  - busy, locked, closed database, I/O error → `domain.ErrUnavailable`, wrapping the cause with `%w`;
+  - busy, locked, closed database, I/O error → `fmt.Errorf("%w: <action>: %v", domain.ErrUnavailable, err)`: the sentinel with `%w`, the driver cause with `%v` only, so no caller can reach the SQLite error with `errors.As`;
   - unique violation on `(account_id, idempotency_key)` → `domain.ErrRequestInProgress`.
 - Timestamps are stored as INTEGER Unix milliseconds (UTC); IDs as TEXT.
 - Schema changes: edit `schema.sql`, bump `PRAGMA user_version`, and keep the `STRICT`, `CHECK` and `UNIQUE` constraints in line with `docs/consistency.md`.
