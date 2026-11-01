@@ -23,7 +23,7 @@ One ticket per step: the foundations, each feature, and each edge case or small 
 | [T09](T09-release.md) | Release and read a reservation | Feature | P0 | 20 min | T06 | [#9](https://github.com/guillaumebarbas/reserve-file/issues/9) | `feat/t09-release` | 25 min |
 | [T10](T10-double-release.md) | Double and concurrent release | Case | P0 | 15 min | T09 | [#10](https://github.com/guillaumebarbas/reserve-file/issues/10) | `feat/t10-double-release` | 15 min |
 | [T11](T11-restart-and-shutdown.md) | Restart and graceful shutdown | Case | P0 | 15 min | T09 | [#11](https://github.com/guillaumebarbas/reserve-file/issues/11) | `feat/t11-restart-and-shutdown` | 20 min |
-| [T12](T12-demo-and-readme.md) | Demo script and README | Delivery | P0 | 25 min | T01 to T11 | [#12](https://github.com/guillaumebarbas/reserve-file/issues/12) | `chore/t12-demo-and-readme` | |
+| [T12](T12-demo-and-readme.md) | Demo script and README | Delivery | P0 | 25 min | T01 to T11 | [#12](https://github.com/guillaumebarbas/reserve-file/issues/12) | `chore/t12-demo-and-readme` | 35 min (three parts) |
 | [T13](T13-invalid-input.md) | Invalid input | Case | P1 | 15 min | T06 | [#13](https://github.com/guillaumebarbas/reserve-file/issues/13) | `feat/t13-invalid-input` | 15 min |
 | [T14](T14-key-reuse.md) | Same key, different size | Case | P1 | 10 min | T08 | [#14](https://github.com/guillaumebarbas/reserve-file/issues/14) | `feat/t14-key-reuse` | 10 min |
 | [T15](T15-duplicate-in-flight.md) | Same request twice at the same time | Case | P1 | 25 min | T08 | [#15](https://github.com/guillaumebarbas/reserve-file/issues/15) | `feat/t15-duplicate-in-flight` | 25 min |
