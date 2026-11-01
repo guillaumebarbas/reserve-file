@@ -13,13 +13,15 @@ import (
 	"time"
 
 	"github.com/guillaumebarbas/reserve-file/internal/handler"
+	"github.com/guillaumebarbas/reserve-file/internal/repository/sqlite"
 )
 
 const shutdownTimeout = 10 * time.Second
 
-// Run starts the service and blocks until ctx is cancelled, then shuts the
-// HTTP server down gracefully. It returns an error if the service cannot
-// start, stops on its own, or does not finish its requests in time.
+// Run opens the database, starts the service and blocks until ctx is
+// cancelled, then shuts the HTTP server down gracefully and closes the
+// database. It returns an error if the service cannot start, stops on its
+// own, or does not finish its requests in time.
 //
 // With "healthcheck" as first argument, Run instead checks that the instance
 // listening on HTTP_ADDR answers /healthz, and returns an error if it does not.
@@ -32,7 +34,12 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout 
 		return healthcheck(config.HTTPAddr)
 	}
 	logger := slog.New(slog.NewJSONHandler(stdout, &slog.HandlerOptions{Level: config.LogLevel}))
-	return serve(ctx, config.HTTPAddr, logger)
+	store, err := sqlite.Open(ctx, config.DBPath, config.SeedAccounts)
+	if err != nil {
+		return err
+	}
+	serveErr := serve(ctx, config.HTTPAddr, logger)
+	return errors.Join(serveErr, store.Close())
 }
 
 func serve(ctx context.Context, httpAddr string, logger *slog.Logger) error {
