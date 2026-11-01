@@ -162,6 +162,10 @@ func (repository *blockingAccountRepository) Reservation(ctx context.Context, ac
 	return domain.Reservation{}, domain.ErrReservationNotFound
 }
 
+func (repository *blockingAccountRepository) ListActiveReservations(ctx context.Context, accountID string) ([]domain.Reservation, error) {
+	return nil, nil
+}
+
 type panickingAccountRepository struct {
 	reserveCalls int
 }
@@ -181,4 +185,8 @@ func (repository *panickingAccountRepository) Release(ctx context.Context, accou
 
 func (repository *panickingAccountRepository) Reservation(ctx context.Context, accountID, reservationID string) (domain.Reservation, error) {
 	return domain.Reservation{}, domain.ErrReservationNotFound
+}
+
+func (repository *panickingAccountRepository) ListActiveReservations(ctx context.Context, accountID string) ([]domain.Reservation, error) {
+	return nil, nil
 }

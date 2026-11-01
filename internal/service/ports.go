@@ -12,6 +12,7 @@ type AccountRepository interface {
 	Reserve(ctx context.Context, candidate domain.Reservation, maxActive domain.MaxActive) (domain.Reservation, domain.Outcome, error)
 	Release(ctx context.Context, accountID, reservationID string, releasedAt time.Time) (domain.Reservation, error)
 	Reservation(ctx context.Context, accountID, reservationID string) (domain.Reservation, error)
+	ListActiveReservations(ctx context.Context, accountID string) ([]domain.Reservation, error)
 }
 
 type LimitProvider interface {

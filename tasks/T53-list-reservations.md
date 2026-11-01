@@ -35,7 +35,7 @@ The user is a client application. Account `small_account`.
 ## Tests
 
 Unit (`internal/service`):
-- [ ] `TestService_ListActiveReservationsChecksTheAccount` — an unknown account returns `ErrAccountNotFound` without reading the list; a known one returns what the repository listed.
+- [x] `TestService_ListActiveReservationsChecksTheAccount` — an unknown account returns `ErrAccountNotFound` without reading the list; a known one returns what the repository listed.
 
 Integration (`internal/repository/sqlite`, `internal/handler`):
 - [ ] `TestListActiveReservations_OnlyActiveOldestFirst` — released reservations and those of other accounts are left out; the order follows `created_at`, not the key, the ID or the insertion order.

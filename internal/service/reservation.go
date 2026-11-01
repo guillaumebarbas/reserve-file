@@ -26,3 +26,10 @@ func (service *Service) Reserve(ctx context.Context, accountID, idempotencyKey s
 	}
 	return service.accounts.Reserve(ctx, candidate, domain.MaxActive{Value: maxActive, Known: known})
 }
+
+func (service *Service) ListActiveReservations(ctx context.Context, accountID string) ([]domain.Reservation, error) {
+	if _, err := service.accounts.Account(ctx, accountID); err != nil {
+		return nil, err
+	}
+	return service.accounts.ListActiveReservations(ctx, accountID)
+}

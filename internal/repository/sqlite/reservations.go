@@ -47,6 +47,10 @@ func (store *Store) Reserve(ctx context.Context, candidate domain.Reservation, m
 	return reservation, outcome, translateDriverError("commit reserve", transaction.Commit())
 }
 
+func (store *Store) ListActiveReservations(ctx context.Context, accountID string) ([]domain.Reservation, error) {
+	return nil, nil
+}
+
 func findReservationByKey(ctx context.Context, transaction *sql.Tx, accountID, idempotencyKey string) (*domain.Reservation, error) {
 	reservation, err := scanReservation(transaction.QueryRowContext(ctx, selectReservationByKey, accountID, idempotencyKey))
 	if errors.Is(err, domain.ErrReservationNotFound) {
