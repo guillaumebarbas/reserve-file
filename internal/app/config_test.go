@@ -31,7 +31,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 }
 
 func TestLoadConfig_SeedAccounts(t *testing.T) {
-	environment := map[string]string{"SEED_ACCOUNTS": "acc_one:100, acc_two:200"}
+	environment := map[string]string{"SEED_ACCOUNTS": "acc_one:100, acc_two : 200"}
 
 	got, err := loadConfig(fakeGetenv(environment))
 

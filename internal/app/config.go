@@ -54,11 +54,12 @@ func loadConfig(getenv func(string) string) (Config, error) {
 func parseSeedAccounts(value string) (map[string]int64, error) {
 	accounts := make(map[string]int64)
 	for _, entry := range strings.Split(value, ",") {
-		id, limit, found := strings.Cut(strings.TrimSpace(entry), ":")
+		id, limit, found := strings.Cut(entry, ":")
+		id = strings.TrimSpace(id)
 		if !found || id == "" {
 			return nil, fmt.Errorf("entry %q: want <account id>:<limit in bytes>", entry)
 		}
-		limitBytes, err := strconv.ParseInt(limit, 10, 64)
+		limitBytes, err := strconv.ParseInt(strings.TrimSpace(limit), 10, 64)
 		if err != nil || limitBytes < 0 {
 			return nil, fmt.Errorf("entry %q: the limit must be a whole number of bytes, 0 or more", entry)
 		}
