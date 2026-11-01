@@ -34,7 +34,7 @@ The user is the operator of the service. These checks become visible through the
 
 Unit (`internal/app`): reading `SEED_ACCOUNTS` is configuration, so it lives in `loadConfig` rather than in `repository/sqlite`.
 - [x] `TestLoadConfig_Defaults` — also checks `DB_PATH` (`/data/reserve.db`) and the default accounts (`acc_demo` 10 GiB, `acc_small` 100 MiB).
-- [x] `TestLoadConfig_SeedAccounts` — `acc_one:100, acc_two:200` gives two accounts; spaces around entries are ignored.
+- [x] `TestLoadConfig_SeedAccounts` — `acc_one:100, acc_two : 200` gives two accounts: spaces around entries and around the colon are ignored.
 - [x] `TestLoadConfig_InvalidValues` — six rows added: missing colon, non-numeric limit, negative limit, duplicate ID, empty entry, empty ID. Each error names `SEED_ACCOUNTS`.
 
 Integration (`internal/repository/sqlite`):
@@ -65,3 +65,4 @@ Run on 2026-11-01.
   - `SEED_ACCOUNTS=acc_demo`: exit 1, `load configuration: SEED_ACCOUNTS: entry "acc_demo": want <account id>:<limit in bytes>`;
   - `DB_PATH=/data`, a directory: exit 1, `open database /data: read schema version: unable to open database file (14)`;
   - `docker compose stop`: `shutting down`, then `server stopped`, exit 0, and no `-wal` or `-shm` file left: the database is closed after the server.
+- Review of [PR #27](https://github.com/guillaumebarbas/reserve-file/pull/27): spaces around the colon stayed in the account ID, so `acc_demo :100` seeded an account named `acc_demo `. `TestLoadConfig_SeedAccounts` failed with such spaces, then passed once the ID and the limit are trimmed separately. Afterwards, the same counts pass, coverage is still 100.0% and the image builds.
