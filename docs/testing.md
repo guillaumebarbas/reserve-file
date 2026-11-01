@@ -24,7 +24,7 @@ Unit and integration tests live next to the code they test and run together. Why
 
 ## Coverage
 
-- Unit and integration tests together cover **100% of the statements in `./internal/...`**. `docker compose run --rm test` runs `go test -race -coverpkg=./internal/... -coverprofile=coverage.out ./...`, then `scripts/check-coverage.sh coverage.out`, which fails below 100%.
+- Unit and integration tests together cover **100% of the statements in `./internal/...`**. `docker compose run --rm test` runs `go test -race -coverpkg=./internal/... -coverprofile=/tmp/coverage.out ./...`, then `scripts/check-coverage.sh /tmp/coverage.out`, which fails below 100%.
 - `cmd/api/main.go` only handles signals and calls `app.Run`, so it stays outside the metric.
 - An error branch is covered by reproducing the failure it handles (next section). A branch that no meaningful test can reach is dead code and is removed.
 - Coverage shows which lines ran, not that they are right: every test asserts outcomes, and database tests check the invariants.

@@ -31,8 +31,8 @@ services:
       - -c
       - >-
         go vet ./...
-        && go test -race -coverpkg=./internal/... -coverprofile=coverage.out ./...
-        && sh scripts/check-coverage.sh coverage.out
+        && go test -race -coverpkg=./internal/... -coverprofile=/tmp/coverage.out ./...
+        && sh scripts/check-coverage.sh /tmp/coverage.out
 
 volumes:
   data:
