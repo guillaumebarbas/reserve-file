@@ -2,10 +2,13 @@ package sqlite
 
 import (
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/guillaumebarbas/reserve-file/internal/domain"
 )
 
 func TestOpen_CreatesSchema(t *testing.T) {
@@ -283,4 +286,22 @@ func readSchemaVersion(t *testing.T, store *Store) int {
 		t.Fatalf("read user_version: %v", err)
 	}
 	return schemaVersion
+}
+
+func TestStore_Ping(t *testing.T) {
+	store := openStore(t, newDatabasePath(t), nil)
+
+	openErr := store.Ping(t.Context())
+	_ = store.Close()
+	closedErr := store.Ping(t.Context())
+
+	if openErr != nil {
+		t.Errorf("Ping on an open database: got error %v, want nil", openErr)
+	}
+	if !errors.Is(closedErr, domain.ErrServiceUnavailable) {
+		t.Errorf("Ping on a closed database: got error %v, want domain.ErrServiceUnavailable", closedErr)
+	}
+	if errors.Unwrap(closedErr) != domain.ErrServiceUnavailable {
+		t.Errorf("Ping on a closed database: error %v wraps more than domain.ErrServiceUnavailable", closedErr)
+	}
 }

@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"fmt"
 
+	"github.com/guillaumebarbas/reserve-file/internal/domain"
 	_ "modernc.org/sqlite"
 )
 
@@ -29,6 +30,13 @@ func Open(ctx context.Context, path string, accounts map[string]int64) (*Store, 
 		return nil, fmt.Errorf("open database %s: %w", path, err)
 	}
 	return &Store{database: database}, nil
+}
+
+func (store *Store) Ping(ctx context.Context) error {
+	if err := store.database.PingContext(ctx); err != nil {
+		return fmt.Errorf("%w: ping database: %v", domain.ErrServiceUnavailable, err)
+	}
+	return nil
 }
 
 func (store *Store) Close() error {
