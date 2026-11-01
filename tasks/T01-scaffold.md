@@ -27,7 +27,7 @@ Create the repository and a service that does almost nothing but goes through th
 - [x] Dockerfile: `golang:1.27` build stage with `CGO_ENABLED=0`; `gcr.io/distroless/static:nonroot` runtime; `/data` owned by `65532:65532`; `ENTRYPOINT` in exec form.
 - [x] `compose.yaml`:
   - `api`: build, host port `${API_PORT:-8080}` mapped to 8080, named volume `data` mounted on `/data`, health check. `API_PORT` exists because Windows can reserve port ranges (Hyper-V, WSL); a local `.env` file, ignored by git, overrides it;
-  - `test` (profile `test`): `golang:1.27` with the source mounted, running `go vet ./...`, `go test -race -coverpkg=./internal/... -coverprofile=coverage.out ./...` and `scripts/check-coverage.sh coverage.out`.
+  - `test` (profile `test`): `golang:1.27` with the source mounted, writing nothing into it (the coverage profile stays in the container's `/tmp`), running `go vet ./...`, `go test -race -coverpkg=./internal/... -coverprofile=/tmp/coverage.out ./...` and `scripts/check-coverage.sh /tmp/coverage.out`.
 - [x] `scripts/check-coverage.sh` fails unless the total coverage is 100.0%.
 - [x] `gofmt -l .` prints nothing and `docker compose run --rm test` passes.
 
@@ -51,6 +51,7 @@ Integration (`internal/app`, `internal/handler`):
 - [x] `TestRun_FailsWhenAddressInUse` — returns an error instead of hanging.
 - [x] `TestRun_FailsOnInvalidConfiguration` — added during implementation: an invalid variable stops `Run` with an error naming it, instead of starting.
 - [x] `TestHealthcheck_HealthyAndUnhealthy` — no error against a running server; an error against a closed port, and against a server answering `503` (case added during implementation, for the status check). `main` turns the error into exit status 1.
+- [x] `TestHealthcheck_ProbesWhereTheServerListens` — added after the review of #25: a specific `HTTP_ADDR` host is probed as is; an empty, `0.0.0.0` or `::` host is probed through `127.0.0.1`. Skips the specific-host case where `127.0.0.2` is not available, as on macOS.
 
 Container: covered in T22 by `TestContainer_RunsAsNonRootAndWritesVolume`.
 
@@ -60,7 +61,7 @@ Run on 2026-11-01, on Windows 11 with Go 1.27.3 and Docker 29.4.3.
 
 | Check | Result |
 |---|---|
-| `go test ./...` | 7 tests and 2 subtests pass |
+| `go test ./...` | 8 tests and 6 subtests pass |
 | `gofmt -l .`, `go vet ./...` | Nothing reported |
 | `docker compose run --rm test` | Pass with the race detector; coverage of `./internal/...`: 100.0% |
 | `docker compose up --build -d --wait` | Healthy after about 5 s; `curl -i localhost:18080/healthz` returns `200`, `application/json`, `{"status":"ok"}` |
@@ -75,3 +76,8 @@ Notes:
 - If `Serve` stops on its own, `Run` shuts down and returns its error. No test can provoke it, so the path is covered by the normal shutdown but not asserted.
 - An unknown subcommand is ignored and the service starts.
 - Checked from the working tree, not from a fresh clone: the fresh-clone check belongs to T12.
+
+Review of #25 (changes requested, then fixed):
+- The healthcheck always probed `127.0.0.1`, so it failed when `HTTP_ADDR` bound a specific address (found by Codex). It now probes the configured host, and loopback only for an address that listens on every interface. Covered by `TestHealthcheck_ProbesWhereTheServerListens`; image rebuilt and healthy again.
+- The test service wrote `coverage.out` into the bind-mounted checkout, as root on Linux. The profile now stays in the container's `/tmp`; after `docker compose run --rm test`, no file is left in the checkout.
+- Deferred to T12: pinning the base images by digest.
