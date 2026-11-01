@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -90,7 +91,7 @@ func TestRun_FailsWhenDatabaseCannotOpen(t *testing.T) {
 }
 
 func TestHealthcheck_HealthyAndUnhealthy(t *testing.T) {
-	healthyServer := httptest.NewServer(handler.New())
+	healthyServer := httptest.NewServer(handler.New(slog.New(slog.DiscardHandler), nil))
 	defer healthyServer.Close()
 	failingServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusServiceUnavailable)
@@ -181,7 +182,7 @@ func startServerOnHost(t *testing.T, host string) string {
 	if err != nil {
 		t.Skipf("cannot listen on %s on this machine: %v", host, err)
 	}
-	server := httptest.NewUnstartedServer(handler.New())
+	server := httptest.NewUnstartedServer(handler.New(slog.New(slog.DiscardHandler), nil))
 	_ = server.Listener.Close()
 	server.Listener = listener
 	server.Start()

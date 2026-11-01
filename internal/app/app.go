@@ -30,16 +30,17 @@ func Run(ctx context.Context, arguments []string, getEnvironmentVariable func(st
 	if err != nil {
 		return err
 	}
-	serveErr := serveUntilCancelled(ctx, config.HTTPAddress, logger)
+	routes := handler.New(logger, store)
+	serveErr := serveUntilCancelled(ctx, config.HTTPAddress, routes, logger)
 	return errors.Join(serveErr, store.Close())
 }
 
-func serveUntilCancelled(ctx context.Context, httpAddress string, logger *slog.Logger) error {
+func serveUntilCancelled(ctx context.Context, httpAddress string, routes http.Handler, logger *slog.Logger) error {
 	listener, err := net.Listen("tcp", httpAddress)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", httpAddress, err)
 	}
-	server := newHTTPServer(handler.New())
+	server := newHTTPServer(routes)
 
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
