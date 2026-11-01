@@ -155,6 +155,63 @@ func TestReserve_RetryReturnsSameReservation(t *testing.T) {
 	assertInvariants(t, store.database)
 }
 
+func TestReserve_RefusedAttemptIsNotRemembered(t *testing.T) {
+	store := openStore(t, newDatabasePath(t), map[string]int64{"small_account": 104857600})
+	_, _, refusedErr := store.Reserve(t.Context(), newCandidate("small_account", "reservation_1", "key_1", 209715200), domain.MaxActive{Value: 5, Known: true})
+	var refusal domain.InsufficientStorageError
+	if !errors.As(refusedErr, &refusal) {
+		t.Fatalf("first attempt of 200 MiB on 100 MiB: got error %v, want domain.InsufficientStorageError", refusedErr)
+	}
+	execute(t, store, "UPDATE accounts SET storage_limit_bytes = 314572800 WHERE id = 'small_account'")
+
+	reservation, outcome, err := store.Reserve(t.Context(), newCandidate("small_account", "reservation_2", "key_1", 209715200), domain.MaxActive{Value: 5, Known: true})
+
+	if err != nil {
+		t.Fatalf("retry with the same key once the limit is raised: unexpected error: %v", err)
+	}
+	if outcome != domain.Created || reservation.ID != "reservation_2" {
+		t.Errorf("retry with the same key once the limit is raised: got outcome %d and reservation %q, want domain.Created and reservation_2", outcome, reservation.ID)
+	}
+	wantReservations := []storedReservation{{id: "reservation_2", accountID: "small_account", idempotencyKey: "key_1", bytes: 209715200, status: "active", createdAt: reservation.CreatedAt.UnixMilli()}}
+	if got := readStoredReservations(t, store); !slices.Equal(got, wantReservations) {
+		t.Errorf("reservations: got %+v, want %+v", got, wantReservations)
+	}
+	wantAccounts := []storedAccount{{id: "small_account", limitBytes: 314572800, reservedBytes: 209715200, activeReservations: 1}}
+	if got := readStoredAccounts(t, store); !slices.Equal(got, wantAccounts) {
+		t.Errorf("accounts: got %+v, want %+v", got, wantAccounts)
+	}
+	assertInvariants(t, store.database)
+}
+
+func TestReserve_DifferentKeysCreateDifferentReservations(t *testing.T) {
+	store := openStore(t, newDatabasePath(t), map[string]int64{"small_account": 104857600})
+	if _, _, err := store.Reserve(t.Context(), newCandidate("small_account", "reservation_1", "key_1", 4194304), domain.MaxActive{Value: 5, Known: true}); err != nil {
+		t.Fatalf("first reservation: %v", err)
+	}
+
+	reservation, outcome, err := store.Reserve(t.Context(), newCandidate("small_account", "reservation_2", "key_2", 4194304), domain.MaxActive{Value: 5, Known: true})
+
+	if err != nil {
+		t.Fatalf("same size with another key: unexpected error: %v", err)
+	}
+	if outcome != domain.Created || reservation.ID != "reservation_2" {
+		t.Errorf("same size with another key: got outcome %d and reservation %q, want domain.Created and reservation_2", outcome, reservation.ID)
+	}
+	createdAt := reservation.CreatedAt.UnixMilli()
+	wantReservations := []storedReservation{
+		{id: "reservation_1", accountID: "small_account", idempotencyKey: "key_1", bytes: 4194304, status: "active", createdAt: createdAt},
+		{id: "reservation_2", accountID: "small_account", idempotencyKey: "key_2", bytes: 4194304, status: "active", createdAt: createdAt},
+	}
+	if got := readStoredReservations(t, store); !slices.Equal(got, wantReservations) {
+		t.Errorf("reservations: got %+v, want %+v", got, wantReservations)
+	}
+	wantAccounts := []storedAccount{{id: "small_account", limitBytes: 104857600, reservedBytes: 8388608, activeReservations: 2}}
+	if got := readStoredAccounts(t, store); !slices.Equal(got, wantAccounts) {
+		t.Errorf("accounts: got %+v, want %+v", got, wantAccounts)
+	}
+	assertInvariants(t, store.database)
+}
+
 func TestReserve_KeyLookupFailureWritesNothing(t *testing.T) {
 	store := openStore(t, newDatabasePath(t), map[string]int64{"small_account": 104857600})
 	execute(t, store, "DROP TABLE reservations")
