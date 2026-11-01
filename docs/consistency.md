@@ -140,7 +140,7 @@ Concurrent requests with different keys are not refused for being concurrent: pa
 
 Measured before `_txlock=immediate` (T07): in WAL mode the limit was never exceeded, because a transaction that read an older snapshot cannot write. But 7 to 19 of 50 concurrent requests failed to upgrade their read lock to a write lock, with `SQLITE_BUSY`, and got `503` instead of their real answer: `busy_timeout` cannot help a transaction whose snapshot is stale. With `BEGIN IMMEDIATE`, each request waits for the lock, then reads the state left by the previous one.
 
-**Proved by.** `TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestAPI_ConcurrentReservations`, `TestReserveRelease_ConcurrentMix`.
+**Proved by.** `TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestAPI_ConcurrentReservations`, `TestReserveRelease_ConcurrentMix`, and over the network `TestContainer_ConcurrentBurstRespectsLimit`.
 
 ### P2 — The response is lost and the client retries
 
@@ -211,7 +211,7 @@ The value is never fetched on the request path ([D12](decisions.md#d12--external
 
 The payload contains analytics tokens and is never logged.
 
-**Proved by.** `TestFetcher_RejectsInvalidResponses`, `TestLimits_KeepsLastValidValueOnFailure`, `TestLimits_KeepsLastValidValueWhenSourceTimesOut`, `TestLimits_NeverLogsBody`, `TestLimits_ReloadsPersistedValue`, `TestLimits_RetriesSaveAfterFailure`, `TestLimits_RetriesWithBackoffWhileUnknown`, `TestLimits_UnknownUntilFirstSuccess`, `TestAPI_ReserveWhenLimitUnknown`.
+**Proved by.** `TestFetcher_RejectsInvalidResponses`, `TestLimits_KeepsLastValidValueOnFailure`, `TestLimits_KeepsLastValidValueWhenSourceTimesOut`, `TestLimits_NeverLogsBody`, `TestLimits_ReloadsPersistedValue`, `TestLimits_RetriesSaveAfterFailure`, `TestLimits_RetriesWithBackoffWhileUnknown`, `TestLimits_UnknownUntilFirstSuccess`, `TestAPI_ReserveWhenLimitUnknown`, and in the container `TestContainer_LimitSourceDownKeepsLastValue`, `TestContainer_FirstStartWithoutLimitSource`.
 
 ### P9 — The database is unavailable
 

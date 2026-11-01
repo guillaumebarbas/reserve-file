@@ -86,6 +86,8 @@ docker compose run --rm test     # go vet, race detector, 100% coverage check
 go test -tags e2e ./e2e/...      # container tests (needs Go and Docker)
 ```
 
+The container tests start the image with `compose.yaml` and `compose.e2e.yaml` as Compose project `reserve-e2e`, publishing the API on port 18090, so a developer's stack is untouched. `compose.e2e.yaml` adds an `env-stub` service, an nginx serving `e2e/testdata/env.json` (only `MAX_PARALLEL_CHUNKS: 5`, never the real payload), and seeds the default accounts explicitly. Each test starts from a fresh volume, waits for `/readyz` instead of sleeping, and runs `docker compose down --volumes --rmi local` in `t.Cleanup`, so it cleans up even after a failure. The `e2e` build tag keeps them out of `go test ./...` and of the coverage metric.
+
 ## Demo script
 
 `scripts/demo.sh` runs against the Compose stack (`docker compose up -d`, then `docker compose run --rm demo`) and prints each step with the expected and the actual answer. It uses account `small_account` at its default 100 MiB. It checks that nothing is reserved before it starts, stops with a non-zero exit code at the first unexpected answer, and always releases what it created, so it can be run again. Its keys carry a run identifier, so a new run never replays an earlier one.
