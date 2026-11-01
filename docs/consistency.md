@@ -172,9 +172,9 @@ The guard is a convenience. The `UNIQUE (account_id, idempotency_key)` constrain
 
 **Problem.** When the retry arrives, the account may be full, all slots may be taken (possibly by this very reservation), the limit source may be down, or the reservation may already be released.
 
-**Solution.** The idempotency lookup comes before every other check, so all these retries return the original reservation. A released reservation is returned as released and never created again.
+**Solution.** The idempotency lookup comes before every other check, so all these retries return the original reservation. A released reservation is returned as released, with its `released_at`, and never created again. The reserve transaction still reads the account row, which must exist, and the service still reads the cached `MAX_PARALLEL_CHUNKS`, but the answer to a known key is decided before any limit, slot or space rule uses them.
 
-**Proved by.** `TestAccount_Reserve` (replay cases).
+**Proved by.** `TestAccount_Reserve` (replay cases), `TestReserve_ReplayOfReleasedReservation`, `TestReserve_ReplayWhenAccountFull`, `TestReserve_ReplayWhenEverySlotIsUsed`, `TestReserve_ReplayWhenLimitUnknown`, `TestAPI_ReplayOfReleasedReservation`, `TestAPI_ReplayWhenAccountFull`, `TestAPI_ReplayWhenLimitUnknown`.
 
 ### P6 — Double release and concurrent releases
 
@@ -182,11 +182,11 @@ The guard is a convenience. The `UNIQUE (account_id, idempotency_key)` constrain
 
 **Solution.** `Account.Release` gives the space back only on a real `active → released` transition, and changes nothing on a reservation already released. The `UPDATE … WHERE status = 'active'` that saves it is a second guard. Later calls return `200` with the same body.
 
-An unknown reservation, or one owned by another account, gets `404` rather than `403`, so the service does not reveal that it exists.
+An unknown or malformed ID, or a reservation owned by another account, gets the same `404 reservation_not_found`, rather than a `403` or a `400`, so the service does not reveal that a reservation exists in another account. Nothing is written: the read is scoped by `account_id`, so the other account's reservation and counters are never touched.
 
 With `BEGIN IMMEDIATE`, the reservation is read under the write lock, so the second guard can only refuse a row that something else changed in between; `TestRelease_RollsBackWhenTheRowIsNotUpdated` simulates that with a trigger, and the whole release rolls back.
 
-**Proved by.** `TestAccount_ReleaseTwice`, `TestRelease_Twice`, `TestRelease_ConcurrentReleasesCreditOnce`, `TestReserveRelease_ConcurrentMix`, `TestRelease_RollsBackWhenTheRowIsNotUpdated`, `TestRelease_OtherAccountIsNotFound`, `TestAPI_ReleaseIdempotent`.
+**Proved by.** `TestAccount_ReleaseTwice`, `TestRelease_Twice`, `TestRelease_ConcurrentReleasesCreditOnce`, `TestReserveRelease_ConcurrentMix`, `TestRelease_RollsBackWhenTheRowIsNotUpdated`, `TestRelease_OtherAccountIsNotFound`, `TestGet_OtherAccountIsNotFound`, `TestAPI_ReleaseIdempotent`, `TestAPI_ReleaseUnknownAndForeignLookTheSame`.
 
 ### P7 — A limit drops below current usage
 
@@ -204,14 +204,14 @@ The value is never fetched on the request path ([D12](decisions.md#d12--external
 |---|---|
 | Down, `5xx` or slower than 3 s, after a value was obtained | The last valid value is kept (memory and database), a warning is logged without the payload, and the next fetch comes after the normal 60 s: a valid value is in use, so there is no hurry |
 | The service restarts during the outage | The last valid value is reloaded from `settings`. A save that failed is retried at the next refresh, so the stored value does not lag behind |
-| First start during an outage, nothing stored | New reservations get `503 limit_unavailable` with `Retry-After`; release, usage, `GET` and replays are unaffected ([D13](decisions.md#d13--fail-closed-until-the-limit-is-known)). The fetch is retried after 1 s, then 2, 4, 8, 16 and every 30 s, until a value is obtained; from then on the normal 60 s applies |
+| First start during an outage, nothing stored | New reservations get `503 limit_unavailable` with `Retry-After: 5`; release, usage (`max_active_reservations: null`), `GET` and replays are unaffected, and `/readyz` answers `200` with `"limits":"unavailable"` ([D13](decisions.md#d13--fail-closed-until-the-limit-is-known)). The fetch is retried after 1 s, then 2, 4, 8, 16 and every 30 s, until a value is obtained; from then on the normal 60 s applies, and new reservations are accepted without a restart |
 | Key missing, `"5"`, `5.5`, `0`, a negative number, invalid JSON, body over 1 MiB | The value is rejected and the previous one kept |
 | The value increases | It applies from the next refresh (within 60 s) |
 | The value decreases | See P7 |
 
 The payload contains analytics tokens and is never logged.
 
-**Proved by.** `TestFetcher_RejectsInvalidResponses`, `TestLimits_KeepsLastValidValueOnFailure`, `TestLimits_KeepsLastValidValueWhenSourceTimesOut`, `TestLimits_NeverLogsBody`, `TestLimits_ReloadsPersistedValue`, `TestLimits_RetriesSaveAfterFailure`, `TestLimits_RetriesWithBackoffWhileUnknown`, `TestLimits_UnknownUntilFirstSuccess`, `TestAPI_ReserveWhenLimitUnknown`, and in the container `TestContainer_LimitSourceDownKeepsLastValue`, `TestContainer_FirstStartWithoutLimitSource`.
+**Proved by.** `TestFetcher_RejectsInvalidResponses`, `TestLimits_KeepsLastValidValueOnFailure`, `TestLimits_KeepsLastValidValueWhenSourceTimesOut`, `TestLimits_NeverLogsBody`, `TestLimits_ReloadsPersistedValue`, `TestLimits_RetriesSaveAfterFailure`, `TestLimits_RetriesWithBackoffWhileUnknown`, `TestLimits_UnknownUntilFirstSuccess`, `TestAPI_ReserveWhenLimitUnknown`, `TestAPI_ReleaseWhenLimitUnknown`, `TestAPI_ReplayAndReadWhenLimitUnknown`, `TestAPI_UsageWhenLimitUnknown`, `TestRun_FirstStartDuringOutage`, `TestRun_KeepsReservingWhenSourceGoesDown`, `TestRun_RestartDuringOutageKeepsTheLastLimit`, and in the container `TestContainer_LimitSourceDownKeepsLastValue`, `TestContainer_FirstStartWithoutLimitSource`.
 
 ### P9 — The database is unavailable
 
