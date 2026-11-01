@@ -30,7 +30,7 @@ Take-home exercise for Hivenet: a Go service that reserves storage space for upl
 
 - Branch names follow Conventional Branch (`feat/t06-reserve`, listed in `tasks/README.md`); commit messages follow Conventional Commits (skill `conventional-commit`).
 - Never commit on `main`. Commit and push only through `/push-code`.
-- GitHub operations (issues, labels, pull requests, project) go through the GitHub MCP server defined in `.mcp.json`: official image, OAuth login with the token kept in memory, toolsets limited to `context,repos,issues,labels,pull_requests,projects`. `gh` is the fallback.
+- GitHub operations (issues, labels, pull requests, project) go through the GitHub MCP server defined in `.mcp.json`: official image, authenticated with a personal access token read from the `GITHUB_MCP_PAT` environment variable (scopes `repo` and `project`), toolsets limited to `context,repos,issues,labels,pull_requests,projects`. Without the variable the server falls back to OAuth, but Claude Code cannot display its login URL, so every call fails. `gh` is the fallback.
 
 ## Ticket state
 
