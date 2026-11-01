@@ -163,11 +163,14 @@ Concurrent reservations are proved by tests that start 20 to 50 reservations at 
 
 ### Demo
 
-With the stack running (`docker compose up -d`), run the demo against it:
+With the stack built from the current code and running, run the demo against it:
 
 ```sh
+docker compose up -d --build
 docker compose run --rm demo
 ```
+
+Keep `--build`: without it, Compose reuses an image built earlier from older code, and the demo fails on the endpoints that image lacks.
 
 It uses `small_account` (100 MiB) and prints, for each step, the expected and the actual answer:
 1. usage before anything: nothing reserved;
