@@ -38,6 +38,7 @@ func New(logger *slog.Logger, database DatabasePinger, limitProvider LimitProvid
 	routes.HandleFunc("GET /healthz", handlers.reportLiveness)
 	routes.HandleFunc("GET /readyz", handlers.reportReadiness)
 	routes.HandleFunc("GET /accounts/{accountID}/usage", handlers.reportUsage)
+	routes.HandleFunc("POST /accounts/{accountID}/reservations", handlers.reserve)
 	return withRequestID(withAccessLog(logger, withPanicRecovery(handlers, routes)))
 }
 

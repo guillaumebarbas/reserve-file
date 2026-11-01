@@ -62,6 +62,14 @@ func TestWriteError_Catalogue(t *testing.T) {
 			wantDetail: "The request body is not valid JSON.",
 		},
 		{
+			name:       "invalid_idempotency_key",
+			err:        invalidIdempotencyKey("The Idempotency-Key header is required. Generate one key per logical request and reuse it on every retry."),
+			wantStatus: http.StatusBadRequest,
+			wantCode:   "invalid_idempotency_key",
+			wantTitle:  "Invalid idempotency key",
+			wantDetail: "The Idempotency-Key header is required. Generate one key per logical request and reuse it on every retry.",
+		},
+		{
 			name:       "request_too_large",
 			err:        requestTooLarge(),
 			wantStatus: http.StatusRequestEntityTooLarge,

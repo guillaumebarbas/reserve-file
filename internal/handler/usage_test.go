@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/guillaumebarbas/reserve-file/internal/repository/sqlite"
 	"github.com/guillaumebarbas/reserve-file/internal/service"
@@ -71,12 +72,17 @@ func TestAPI_UsageWhenLimitUnknown(t *testing.T) {
 
 func newRoutesWithLargeAccount(t *testing.T, limitProvider fakeLimitProvider) http.Handler {
 	t.Helper()
-	store, err := sqlite.Open(t.Context(), filepath.Join(t.TempDir(), "reserve.db"), map[string]int64{"large_account": 10737418240})
+	return newRoutesWithAccounts(t, map[string]int64{"large_account": 10737418240}, limitProvider)
+}
+
+func newRoutesWithAccounts(t *testing.T, accounts map[string]int64, limitProvider fakeLimitProvider) http.Handler {
+	t.Helper()
+	store, err := sqlite.Open(t.Context(), filepath.Join(t.TempDir(), "reserve.db"), accounts)
 	if err != nil {
 		t.Fatalf("open the database: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	return New(slog.New(slog.DiscardHandler), store, limitProvider, service.New(store, limitProvider))
+	return New(slog.New(slog.DiscardHandler), store, limitProvider, service.New(store, limitProvider, time.Now))
 }
 
 func requestUsage(routes http.Handler, accountID string) *httptest.ResponseRecorder {

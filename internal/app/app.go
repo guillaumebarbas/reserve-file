@@ -37,7 +37,7 @@ func Run(ctx context.Context, arguments []string, getEnvironmentVariable func(st
 	refresherCtx, stopRefresher := context.WithCancel(ctx)
 	var refreshing sync.WaitGroup
 	refreshing.Go(func() { limitCache.Run(refresherCtx) })
-	routes := handler.New(logger, store, limitCache, service.New(store, limitCache))
+	routes := handler.New(logger, store, limitCache, service.New(store, limitCache, time.Now))
 	serveErr := serveUntilCancelled(ctx, config.HTTPAddress, routes, logger)
 	stopRefresher()
 	refreshing.Wait()
