@@ -194,7 +194,9 @@ With `BEGIN IMMEDIATE`, the reservation is read under the write lock, so the sec
 
 **Solution.** Nothing is revoked ([D11](decisions.md#d11--lowered-limits-never-revoke-reservations)). New reservations are refused until usage is back under the limit; release, usage and replays keep working. `available_bytes` is reported as `max(0, limit − reserved)`.
 
-**Proved by.** `TestReserve_AfterStorageLimitLowered`, `TestReserve_AfterMaxActiveLowered`, `TestAccount_AvailableBytesNeverNegative`.
+A storage limit is lowered by an operator through `SEED_ACCOUNTS` at the next start: the seed updates `storage_limit_bytes` and never touches the counters ([D17](decisions.md#d17--accounts-seeded-from-configuration)). Usage then shows `reserved_bytes` above `limit_bytes` with `available_bytes: 0`, or `active_reservations` above `max_active_reservations`. The space check subtracts (`bytes > limit − reserved`), so a negative difference refuses without overflow, and every release brings usage back down until a reservation fits again.
+
+**Proved by.** `TestAccount_Reserve` (`usage_above_a_lowered_limit`, `active_reservations_above_a_lowered_maximum`), `TestAccount_AvailableBytesNeverNegative`, `TestReserve_AfterStorageLimitLowered`, `TestRelease_BringsUsageBackUnderALoweredLimit`, `TestReserve_AfterMaxActiveLowered`, `TestRelease_BringsActiveReservationsBackUnderALoweredMaximum`, `TestAPI_UsageAfterLimitLowered`, `TestAPI_ReleaseAfterLimitLowered`, `TestAPI_ReserveAfterMaxActiveLowered`, `TestRun_AppliesALoweredLimitAtRestart`.
 
 ### P8 — env.hivenet.com is down, slow or returns garbage
 
