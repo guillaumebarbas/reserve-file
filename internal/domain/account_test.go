@@ -43,6 +43,7 @@ func TestRestoreAccount_KeepsCounters(t *testing.T) {
 func TestAccount_Reserve(t *testing.T) {
 	knownLimit := MaxActive{Value: 5, Known: true}
 	existingReservation := Reservation{ID: "existing_reservation", AccountID: "small_account", IdempotencyKey: "key_1", Bytes: 30, Status: StatusActive}
+	releasedReservation := Reservation{ID: "released_reservation", AccountID: "small_account", IdempotencyKey: "key_1", Bytes: 30, Status: StatusReleased}
 	testCases := []struct {
 		name                   string
 		limitBytes             int64
@@ -70,6 +71,10 @@ func TestAccount_Reserve(t *testing.T) {
 		{name: "zero_bytes", limitBytes: 100, maxActive: knownLimit, requestedBytes: 0, wantErr: ErrBytesNotPositive},
 		{name: "negative_bytes", limitBytes: 100, maxActive: knownLimit, requestedBytes: -5, wantErr: ErrBytesNotPositive},
 		{name: "existing_key_with_the_same_bytes_replays", limitBytes: 100, reservedBytes: 30, activeReservations: 1, existing: &existingReservation, maxActive: knownLimit, requestedBytes: 30, wantOutcome: Replayed, wantReservationID: "existing_reservation", wantReservedBytes: 30, wantActiveReservations: 1},
+		{name: "replay_when_the_account_is_full", limitBytes: 100, reservedBytes: 100, activeReservations: 2, existing: &existingReservation, maxActive: knownLimit, requestedBytes: 30, wantOutcome: Replayed, wantReservationID: "existing_reservation", wantReservedBytes: 100, wantActiveReservations: 2},
+		{name: "replay_when_every_slot_is_used_including_its_own", limitBytes: 100, reservedBytes: 50, activeReservations: 5, existing: &existingReservation, maxActive: knownLimit, requestedBytes: 30, wantOutcome: Replayed, wantReservationID: "existing_reservation", wantReservedBytes: 50, wantActiveReservations: 5},
+		{name: "replay_when_the_limit_is_unknown", limitBytes: 100, reservedBytes: 30, activeReservations: 1, existing: &existingReservation, maxActive: MaxActive{}, requestedBytes: 30, wantOutcome: Replayed, wantReservationID: "existing_reservation", wantReservedBytes: 30, wantActiveReservations: 1},
+		{name: "replay_of_a_released_reservation", limitBytes: 100, maxActive: knownLimit, requestedBytes: 30, existing: &releasedReservation, wantOutcome: Replayed, wantReservationID: "released_reservation"},
 		{name: "replay_comes_before_every_admission_rule", limitBytes: 30, reservedBytes: 30, activeReservations: 5, existing: &existingReservation, maxActive: MaxActive{}, requestedBytes: 30, wantOutcome: Replayed, wantReservationID: "existing_reservation", wantReservedBytes: 30, wantActiveReservations: 5},
 		{name: "existing_key_with_other_bytes_is_refused", limitBytes: 100, reservedBytes: 30, activeReservations: 1, existing: &existingReservation, maxActive: knownLimit, requestedBytes: 31, wantErr: IdempotencyKeyReusedError{OriginalBytes: 30}, wantReservedBytes: 30, wantActiveReservations: 1},
 		{name: "key_reuse_comes_before_every_admission_rule", limitBytes: 30, reservedBytes: 30, activeReservations: 5, existing: &existingReservation, maxActive: MaxActive{}, requestedBytes: 50, wantErr: IdempotencyKeyReusedError{OriginalBytes: 30}, wantReservedBytes: 30, wantActiveReservations: 5},
