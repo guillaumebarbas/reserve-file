@@ -34,7 +34,7 @@ One ticket per step: the foundations, each feature, and each edge case or small 
 | [T20](T20-database-unavailable.md) | Database unavailable | Case | P1 | 20 min | T06, T09 | [#20](https://github.com/guillaumebarbas/reserve-file/issues/20) | `feat/t20-database-unavailable` | 20 min |
 | [T21](T21-no-partial-state.md) | No partial state after a failure mid-transaction | Case | P1 | 15 min | T06, T09 | [#21](https://github.com/guillaumebarbas/reserve-file/issues/21) | `feat/t21-no-partial-state` | 20 min |
 | [T22](T22-container-tests.md) | Container tests | Delivery | P1 | 40 min | T11 | [#22](https://github.com/guillaumebarbas/reserve-file/issues/22) | `chore/t22-container-tests` | 30 min |
-| [T23](T23-openapi.md) | OpenAPI description and Swagger UI | Delivery | P2 | 30 min | T12 | [#23](https://github.com/guillaumebarbas/reserve-file/issues/23) | `feat/t23-openapi` | |
+| [T23](T23-openapi.md) | OpenAPI description and Swagger UI | Delivery | P2 | 30 min | T12 | [#23](https://github.com/guillaumebarbas/reserve-file/issues/23) | `feat/t23-openapi` | 30 min |
 
 **Actual time.** From T04 on, independent tickets are built in parallel by agents in separate worktrees; their actual time is the wall-clock time from launch to merge, so parallel tickets overlap.
 

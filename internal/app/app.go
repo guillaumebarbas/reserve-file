@@ -38,7 +38,7 @@ func Run(ctx context.Context, arguments []string, getEnvironmentVariable func(st
 	var refreshing sync.WaitGroup
 	refreshing.Go(func() { limitCache.Run(refresherCtx) })
 	routes := handler.New(logger, store, limitCache, service.New(store, limitCache, time.Now))
-	serveErr := serveUntilCancelled(ctx, config.HTTPAddress, routes, logger)
+	serveErr := serveUntilCancelled(ctx, config.HTTPAddress, handler.WithCORS(config.CORSAllowedOrigin, routes), logger)
 	stopRefresher()
 	refreshing.Wait()
 	return errors.Join(serveErr, store.Close())

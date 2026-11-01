@@ -8,7 +8,8 @@
 - Sizes are integers in bytes. Timestamps are RFC 3339 in UTC. Reservation IDs are UUIDv7 strings.
 - There is no authentication: the account is taken from the path ([gap G4](consistency.md#gaps-that-would-block-a-production-release)).
 - Every response carries an `X-Request-Id` header.
-- No CORS headers are sent. A browser client on another origin would need `Idempotency-Key` allowed (`Access-Control-Allow-Headers`) and `Idempotent-Replayed` exposed (`Access-Control-Expose-Headers`).
+- CORS is off by default: no CORS header is sent. With `CORS_ALLOWED_ORIGIN` set to one origin, such as Swagger UI's `http://localhost:8081`, requests from that origin get `Access-Control-Allow-Origin`, and `Idempotent-Replayed`, `Location`, `Retry-After` and `X-Request-Id` are exposed (`Access-Control-Expose-Headers`). Its preflight gets `204` with `GET, POST` and the `Content-Type` and `Idempotency-Key` headers allowed. Any other origin gets no CORS header, so the browser blocks it.
+- The same contract, machine-readable: [api/openapi.yaml](../api/openapi.yaml) (OpenAPI 3.1), browsable with Swagger UI through the `docs` Compose profile (see the README, API description). The two are kept consistent.
 
 ## Endpoints
 
