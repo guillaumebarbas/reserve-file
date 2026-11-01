@@ -17,14 +17,14 @@ This ticket proves it under load and adds `_txlock=immediate`. The first concurr
 
 ## Technical acceptance criteria
 
-- [ ] An `assertInvariants(t, db)` helper checks that the counters equal `SUM` / `COUNT` of the active rows, for every account.
+- [ ] An `assertInvariants(t, database)` helper checks that the counters equal `SUM` / `COUNT` of the active rows, for every account.
 - [ ] The first concurrency test is run **before** `_txlock=immediate` is added, and its failure is recorded in **Test results**.
 - [ ] `_txlock=immediate` is added to the DSN, and the concurrency tests then pass.
 - [ ] They also pass under the race detector (`docker compose run --rm test`).
 
 ## User acceptance criteria
 
-The user is a client application uploading chunks in parallel. Account `acc_small`: 100 MiB, `MAX_PARALLEL_CHUNKS` = 5.
+The user is a client application uploading chunks in parallel. Account `small_account`: 100 MiB, `MAX_PARALLEL_CHUNKS` = 5.
 
 - Given 70 MiB are free, when 20 requests of 20 MiB arrive at the same time, then exactly 3 get `201` and 17 get `409 insufficient_storage`, and usage shows exactly 60 MiB more.
 - Given nothing is reserved, when 50 requests of 1 MiB arrive at the same time, then exactly 5 get `201` and 45 get `409 too_many_active_reservations`.

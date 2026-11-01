@@ -19,14 +19,14 @@ Case: a client bug reuses a known `Idempotency-Key` with another size. Returning
 
 ## User acceptance criteria
 
-The user is a client application. Account `acc_small`.
+The user is a client application. Account `small_account`.
 
 - Given K was used to reserve 30 MiB, when the app sends K with 31 MiB, then it gets `422` saying "This Idempotency-Key was already used to reserve 31457280 bytes. Use a new key for a new request.", and usage is unchanged.
 
 ## Tests
 
 Unit (`internal/domain`):
-- [ ] `TestAccount_Reserve` — adds: an existing key with different bytes gives `KeyReusedError`.
+- [ ] `TestAccount_Reserve` — adds: an existing key with different bytes gives `IdempotencyKeyReusedError`.
 
 Integration (`internal/repository/sqlite`, `internal/handler`):
 - [ ] `TestReserve_KeyReuseWithDifferentBytes`

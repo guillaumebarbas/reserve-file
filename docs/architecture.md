@@ -33,6 +33,8 @@ Adapters implement the ports declared in `service` without importing it, because
 | `app` | Every internal package | — |
 | `cmd/api` | `app` | Every other internal package |
 
+The table is about production code. An integration test may use another adapter: `handler`'s `TestAPI_Readyz` opens a real `sqlite.Store`. `go list -f '{{.Imports}}' ./internal/...` shows the production imports only.
+
 ## Package layout
 
 ```
@@ -77,17 +79,17 @@ func RestoreAccount(id string, limitBytes, reservedBytes int64, activeReservatio
 
 // Reserve answers a reservation request. existing is the reservation already made
 // with the same Idempotency-Key, if any, and is answered first: Replayed, or
-// KeyReusedError. Otherwise candidate is admitted only if a slot and enough space
-// are free, and the counters grow: Created.
-func (a *Account) Reserve(candidate Reservation, existing *Reservation, maxActive MaxActive) (Reservation, Outcome, error)
+// IdempotencyKeyReusedError. Otherwise candidate is admitted only if a slot and
+// enough space are free, and the counters grow: Created.
+func (account *Account) Reserve(candidate Reservation, existing *Reservation, maxActive MaxActive) (Reservation, Outcome, error)
 
-// Release marks r released and gives its space back. On a reservation already
-// released, it changes nothing and returns false.
-func (a *Account) Release(r *Reservation, at time.Time) bool
+// Release marks the reservation released and gives its space back. On a
+// reservation already released, it changes nothing and returns false.
+func (account *Account) Release(reservation *Reservation, releasedAt time.Time) bool
 
-func (a Account) AvailableBytes() int64 // max(0, limit − reserved)
-func (a Account) ReservedBytes() int64
-func (a Account) ActiveReservations() int
+func (account Account) AvailableBytes() int64 // max(0, limit − reserved)
+func (account Account) ReservedBytes() int64
+func (account Account) ActiveReservations() int
 
 type MaxActive struct {
     Value int
@@ -140,8 +142,8 @@ Reads the account (a single-row read is consistent without an explicit transacti
 
 | Layer | Responsibility |
 |---|---|
-| `domain` | Defines the errors. Business refusals carry their facts: `InsufficientStorageError{Requested, Available, Limit}`, `TooManyActiveError{Active, Max}`, `KeyReusedError{OriginalBytes}`. Sentinels: `ErrAccountNotFound`, `ErrReservationNotFound`, `ErrRequestInProgress`, `ErrLimitUnavailable`, `ErrUnavailable`. |
-| `repository/sqlite` | Translates driver errors. No rows becomes a not-found sentinel; busy, locked, I/O error or closed database becomes `ErrUnavailable`: `fmt.Errorf("%w: begin reserve: %v", domain.ErrUnavailable, err)`. The sentinel is wrapped with `%w`; the driver cause only with `%v`, so its text reaches the logs but `errors.As` cannot reach the SQLite error. No SQLite error leaves this package. |
+| `domain` | Defines the errors. Business refusals carry their facts: `InsufficientStorageError{RequestedBytes, AvailableBytes, LimitBytes}`, `TooManyActiveReservationsError{ActiveReservations, MaxActiveReservations}`, `IdempotencyKeyReusedError{OriginalBytes}`. Sentinels: `ErrAccountNotFound`, `ErrReservationNotFound`, `ErrRequestInProgress`, `ErrLimitUnavailable`, `ErrServiceUnavailable`. |
+| `repository/sqlite` | Translates driver errors. No rows becomes a not-found sentinel; busy, locked, I/O error or closed database becomes `ErrServiceUnavailable`: `fmt.Errorf("%w: begin reserve: %v", domain.ErrServiceUnavailable, err)`. The sentinel is wrapped with `%w`; the driver cause only with `%v`, so its text reaches the logs but `errors.As` cannot reach the SQLite error. No SQLite error leaves this package. |
 | `handler` | Maps errors to status, `code` and `detail` with `errors.Is` / `errors.As` (catalogue in [api.md](api.md#errors)). Anything unrecognized becomes `500 internal_error`, logged with its `request_id`. |
 
 ## External limit component
@@ -161,10 +163,12 @@ The `limits` package:
 
 **HTTP server timeouts:** read header 5 s, read 10 s, write 15 s, idle 60 s. The write timeout is longer than SQLite's 5 s busy timeout, so a `503` sent after a lock wait still reaches the client.
 
-**Middleware:**
-- request ID, generated per request, returned in `X-Request-Id` and attached to every log line;
-- access log;
-- panic recovery, which answers `500 internal_error`.
+**Middleware**, from the outside in:
+- request ID: 16 random hexadecimal characters (`crypto/rand`), returned in `X-Request-Id`, stored in the request context and written on every log line of the request;
+- access log: one line per request, with method, path, status and duration;
+- panic recovery, which answers `500 internal_error` and logs the panic with its stack trace. It sits inside the access log, so the log records that `500`.
+
+**Readiness:** `handler` declares a one-method interface, `DatabasePinger`, that `sqlite.Store` satisfies without knowing it; `app` passes the store to `handler.New`. `Store.Ping` translates the driver error into `domain.ErrServiceUnavailable`.
 
 ## Configuration
 
@@ -172,7 +176,7 @@ The `limits` package:
 |---|---|---|
 | `HTTP_ADDR` | `:8080` | Listen address |
 | `DB_PATH` | `/data/reserve.db` | SQLite file |
-| `SEED_ACCOUNTS` | `acc_demo:10737418240,acc_small:104857600` | Accounts applied at startup, as `id:limit_bytes` (10 GiB and 100 MiB) |
+| `SEED_ACCOUNTS` | `large_account:10737418240,small_account:104857600` | Accounts applied at startup, as `id:limit_bytes` (10 GiB and 100 MiB) |
 | `ENV_CONFIG_URL` | `https://env.hivenet.com/dev` | Source of `MAX_PARALLEL_CHUNKS` |
 | `ENV_CONFIG_REFRESH` | `60s` | Refresh interval |
 | `ENV_CONFIG_TIMEOUT` | `3s` | Fetch timeout |

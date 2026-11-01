@@ -16,7 +16,7 @@ What the reviewer reads and runs first. The README answers the four points of th
 ## Technical acceptance criteria
 
 - [ ] `scripts/demo.sh` uses only POSIX shell and curl. It runs in a `curlimages/curl` container through the `demo` Compose service, prints each step with the expected and actual status, and exits non-zero at the first mismatch.
-- [ ] The steps are those of testing.md, on `acc_small`. The script checks that nothing is reserved before it starts and releases what it created at the end, so it can be run again.
+- [ ] The steps are those of testing.md, on `small_account`. The script checks that nothing is reserved before it starts and releases what it created at the end, so it can be run again.
 - [ ] The README covers:
   - how to start the stack (`docker compose up --build`);
   - the database setup: automatic schema and seed at startup, data on the `data` volume, reset with `docker compose down -v`;

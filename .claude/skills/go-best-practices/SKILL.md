@@ -23,9 +23,9 @@ The reader is new to Go and must explain the code live. Between two correct opti
 - No `if dep == nil { panic(…) }` in constructors: a missing dependency is a wiring bug that the `app.Run` tests catch.
 
 **Errors**
-- A sentinel goes first: `fmt.Errorf("%w: begin reserve: %v", domain.ErrUnavailable, err)`. Otherwise `%w` goes last.
+- A sentinel goes first: `fmt.Errorf("%w: begin reserve: %v", domain.ErrServiceUnavailable, err)`. Otherwise `%w` goes last.
 - Messages name the action that failed, never "failed to", "unable to" or "couldn't", and do not repeat the inner error.
-- Never drop an error silently: write `_ = f()` when it is deliberate. The deferred `tx.Rollback()` is the one documented exception.
+- Never drop an error silently: write `_ = f()` when it is deliberate. The deferred `transaction.Rollback()` is the one documented exception.
 - Return a literal `nil` on success, never a nil pointer of an error type: stored in an `error`, it is not equal to `nil`.
 - Decide once whether each error type is returned as a pointer or a value, and use the same form as the `errors.As` target.
 
@@ -68,15 +68,15 @@ The reader is new to Go and must explain the code live. Between two correct opti
 | Blank imports (`import _ "driver"`) only in `main` | The driver import stays in `repository/sqlite` | It is the only package allowed to know the driver, and `main` stays trivial |
 | Interfaces next to the domain type, shared `mock` package (Three Dots, Ben Johnson) | Interfaces in `service/ports.go`, fakes in the test files of the package that uses them | Consumer-side interfaces; test doubles are not exported |
 | `var _ Iface = (*T)(nil)` compliance check (Uber) | None in adapters | It would make `repository/sqlite` import `service`; the wiring in `app` already fails to compile |
-| Assertion helpers are not idiomatic (Google) | `assertInvariants(t, db)` with `t.Helper()` | One invariant check reused by every database test; a deliberate project choice |
-| Short names for short-lived variables | Descriptive names except `ctx`, `err`, `tx`, `db`, `w`, `r`, `t`, `i` | The reader is new to Go |
+| Assertion helpers are not idiomatic (Google) | `assertInvariants(t, database)` with `t.Helper()` | One invariant check reused by every database test; a deliberate project choice |
+| Short names for short-lived variables and receivers (`w`, `r`, `tx`, `i`, `s *Store`) | Full words everywhere; only `ctx`, `err`, `t`, `got` and `want` stay short | The reader is new to Go, and the user wants every name to say what it holds |
 | A doc comment on every package and exported name (Go Code Review Comments, Google) | No comments in Go code, only toolchain directives (`//go:embed`) | The user's choice: Go requires none; names carry the meaning, and the reasons go to the chat or to `docs/` |
 
 ## Review checklist
 
 1. Does every new interface live in the package that uses it, and does a fake or a second implementation actually use it?
 2. Is every rule that depends on stored state evaluated inside the repository transaction, through the methods of the `Account` aggregate, with no network call inside?
-3. Is each error handled exactly once, and is every ignored error explicit (`_ =`), except the deferred `tx.Rollback()`?
+3. Is each error handled exactly once, and is every ignored error explicit (`_ =`), except the deferred `transaction.Rollback()`?
 4. Is no driver or transport error reachable with `%w` from outside `repository/sqlite` or `limits`?
 5. Do successful paths return a literal `nil`, and does every `errors.As` target match the form of the returned error?
 6. Does every `writeError` or `http.Error` call return immediately?

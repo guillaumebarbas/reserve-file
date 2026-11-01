@@ -15,37 +15,37 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadConfig: unexpected error: %v", err)
 	}
-	if got.HTTPAddr != ":8080" {
-		t.Errorf("HTTPAddr: got %q, want %q", got.HTTPAddr, ":8080")
+	if got.HTTPAddress != ":8080" {
+		t.Errorf("HTTPAddress: got %q, want %q", got.HTTPAddress, ":8080")
 	}
 	if got.LogLevel != slog.LevelInfo {
 		t.Errorf("LogLevel: got %v, want %v", got.LogLevel, slog.LevelInfo)
 	}
-	if got.DBPath != "/data/reserve.db" {
-		t.Errorf("DBPath: got %q, want %q", got.DBPath, "/data/reserve.db")
+	if got.DatabasePath != "/data/reserve.db" {
+		t.Errorf("DatabasePath: got %q, want %q", got.DatabasePath, "/data/reserve.db")
 	}
-	wantAccounts := map[string]int64{"acc_demo": 10737418240, "acc_small": 104857600}
+	wantAccounts := map[string]int64{"large_account": 10737418240, "small_account": 104857600}
 	if !maps.Equal(got.SeedAccounts, wantAccounts) {
 		t.Errorf("SeedAccounts: got %v, want %v", got.SeedAccounts, wantAccounts)
 	}
 }
 
 func TestLoadConfig_SeedAccounts(t *testing.T) {
-	environment := map[string]string{"SEED_ACCOUNTS": "acc_one:100, acc_two : 200"}
+	environment := map[string]string{"SEED_ACCOUNTS": "first_account:100, second_account : 200"}
 
-	got, err := loadConfig(fakeGetenv(environment))
+	got, err := loadConfig(fakeEnvironment(environment))
 
 	if err != nil {
 		t.Fatalf("loadConfig(%v): unexpected error: %v", environment, err)
 	}
-	want := map[string]int64{"acc_one": 100, "acc_two": 200}
+	want := map[string]int64{"first_account": 100, "second_account": 200}
 	if !maps.Equal(got.SeedAccounts, want) {
 		t.Errorf("loadConfig(%v): SeedAccounts: got %v, want %v", environment, got.SeedAccounts, want)
 	}
 }
 
 func TestLoadConfig_InvalidValues(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name         string
 		environment  map[string]string
 		wantVariable string
@@ -62,27 +62,27 @@ func TestLoadConfig_InvalidValues(t *testing.T) {
 		},
 		{
 			name:         "seed_entry_without_colon",
-			environment:  map[string]string{"SEED_ACCOUNTS": "acc_demo"},
+			environment:  map[string]string{"SEED_ACCOUNTS": "large_account"},
 			wantVariable: "SEED_ACCOUNTS",
 		},
 		{
 			name:         "seed_limit_not_a_number",
-			environment:  map[string]string{"SEED_ACCOUNTS": "acc_demo:ten"},
+			environment:  map[string]string{"SEED_ACCOUNTS": "large_account:ten"},
 			wantVariable: "SEED_ACCOUNTS",
 		},
 		{
 			name:         "seed_negative_limit",
-			environment:  map[string]string{"SEED_ACCOUNTS": "acc_demo:-1"},
+			environment:  map[string]string{"SEED_ACCOUNTS": "large_account:-1"},
 			wantVariable: "SEED_ACCOUNTS",
 		},
 		{
 			name:         "seed_duplicate_account",
-			environment:  map[string]string{"SEED_ACCOUNTS": "acc_demo:1,acc_demo:2"},
+			environment:  map[string]string{"SEED_ACCOUNTS": "large_account:1,large_account:2"},
 			wantVariable: "SEED_ACCOUNTS",
 		},
 		{
 			name:         "seed_empty_entry",
-			environment:  map[string]string{"SEED_ACCOUNTS": "acc_demo:1,,acc_small:2"},
+			environment:  map[string]string{"SEED_ACCOUNTS": "large_account:1,,small_account:2"},
 			wantVariable: "SEED_ACCOUNTS",
 		},
 		{
@@ -91,20 +91,20 @@ func TestLoadConfig_InvalidValues(t *testing.T) {
 			wantVariable: "SEED_ACCOUNTS",
 		},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := loadConfig(fakeGetenv(tc.environment))
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := loadConfig(fakeEnvironment(testCase.environment))
 
 			if err == nil {
-				t.Fatalf("loadConfig(%v): got nil error, want an error", tc.environment)
+				t.Fatalf("loadConfig(%v): got nil error, want an error", testCase.environment)
 			}
-			if !strings.Contains(err.Error(), tc.wantVariable) {
-				t.Errorf("loadConfig(%v): error %q does not name %s", tc.environment, err, tc.wantVariable)
+			if !strings.Contains(err.Error(), testCase.wantVariable) {
+				t.Errorf("loadConfig(%v): error %q does not name %s", testCase.environment, err, testCase.wantVariable)
 			}
 		})
 	}
 }
 
-func fakeGetenv(environment map[string]string) func(string) string {
-	return func(name string) string { return environment[name] }
+func fakeEnvironment(variables map[string]string) func(string) string {
+	return func(name string) string { return variables[name] }
 }

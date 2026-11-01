@@ -25,7 +25,7 @@
 
 ## User acceptance criteria
 
-The user is a client application uploading files. Account `acc_small`: 100 MiB, `MAX_PARALLEL_CHUNKS` = 5.
+The user is a client application uploading files. Account `small_account`: 100 MiB, `MAX_PARALLEL_CHUNKS` = 5.
 
 - Given nothing is reserved, when the app reserves 30 MiB with a new key, then it gets `201`, a reservation ID and a `Location` header, and usage shows 30 MiB reserved and 1 active reservation.
 - Given 90 MiB are reserved, when the app asks for 20 MiB, then it gets `409 insufficient_storage` saying "Requested 20.00 MiB but only 10.00 MiB is available (limit 100.00 MiB). Release a reservation or request less space.", and usage is unchanged.

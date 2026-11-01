@@ -35,7 +35,7 @@ Process: `/implement-task` and the `tdd` skill. Which tests to write: the curren
 ## Database
 
 - A real SQLite file in `t.TempDir()`, one per test. Never `:memory:`: each pooled connection would get its own empty database.
-- Every repository and API test ends with `assertInvariants(t, db)`.
+- Every repository and API test ends with `assertInvariants(t, database)`.
 
 ## Fakes
 
@@ -44,8 +44,8 @@ Process: `/implement-task` and the `tdd` skill. Which tests to write: the curren
 
 ## Concurrency
 
-- Start all goroutines together (close a shared channel), run them with `wg.Go(func() { … })`, then count every outcome exactly after `wg.Wait()`.
-- Never call `t.Fatal`, `t.FailNow` or a helper that does from a goroutine the test started: record results, assert after `wg.Wait()`.
+- Start all goroutines together (close a shared channel), run them with `workers.Go(func() { … })` on a `sync.WaitGroup` named after what it waits for, then count every outcome exactly after `workers.Wait()`.
+- Never call `t.Fatal`, `t.FailNow` or a helper that does from a goroutine the test started: record results, assert after `workers.Wait()`.
 - Never use `time.Sleep` to order events: use channels. Time-based behaviour (refresh interval, backoff) is tested with `testing/synctest`, whose clock is virtual.
 - These tests must pass under the race detector: `docker compose run --rm test`.
 

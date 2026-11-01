@@ -240,7 +240,7 @@ Domain errors carry facts; the HTTP layer writes the text. `5xx` responses never
 
 **Status:** Accepted
 
-**Decision.** `SEED_ACCOUNTS` (for example `acc_demo:10737418240,acc_small:104857600`) is applied at every startup. Missing accounts are created; `storage_limit_bytes` is updated if it changed; counters are never touched.
+**Decision.** `SEED_ACCOUNTS` (for example `large_account:10737418240,small_account:104857600`) is applied at every startup. Missing accounts are created; `storage_limit_bytes` is updated if it changed; counters are never touched.
 
 **Why.** No account-management API is in scope. Re-applying the configured limit on restart also makes the lowered-limit case (D11) easy to demonstrate.
 
@@ -278,7 +278,7 @@ Domain errors carry facts; the HTTP layer writes the text. `5xx` responses never
 **Status:** Accepted
 
 **Decision.** The business rules are methods of the domain types that own the data. `Account` is the aggregate root:
-- `account.Reserve(candidate, existing, maxActive)` answers a reservation request. A retry of a known key is answered first: replay, or `KeyReusedError` if the size differs. Otherwise the candidate is admitted only if a slot and enough space are free, and the counters are updated.
+- `account.Reserve(candidate, existing, maxActive)` answers a reservation request. A retry of a known key is answered first: replay, or `IdempotencyKeyReusedError` if the size differs. Otherwise the candidate is admitted only if a slot and enough space are free, and the counters are updated.
 - `account.Release(reservation, at)` marks an active reservation released and gives its space back. On a reservation already released, it changes nothing.
 - `account.AvailableBytes()` is the space left, never negative.
 

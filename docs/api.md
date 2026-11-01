@@ -24,7 +24,7 @@
 ## Reserve space
 
 ```sh
-curl -i -X POST http://localhost:8080/accounts/acc_demo/reservations \
+curl -i -X POST http://localhost:8080/accounts/large_account/reservations \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: 9b2f4c1e-5a43-4f7e-9d0a-2f7c1b8e4d21' \
   -d '{"bytes": 4194304}'
@@ -32,12 +32,12 @@ curl -i -X POST http://localhost:8080/accounts/acc_demo/reservations \
 
 ```http
 HTTP/1.1 201 Created
-Location: /accounts/acc_demo/reservations/01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f
+Location: /accounts/large_account/reservations/01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f
 Content-Type: application/json
 
 {
   "id": "01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f",
-  "account_id": "acc_demo",
+  "account_id": "large_account",
   "bytes": 4194304,
   "status": "active",
   "created_at": "2026-11-01T12:00:00Z",
@@ -79,13 +79,13 @@ Keys are currently kept forever ([gap G2](consistency.md#gaps-that-would-block-a
 ## Release a reservation
 
 ```sh
-curl -i -X POST http://localhost:8080/accounts/acc_demo/reservations/01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f/release
+curl -i -X POST http://localhost:8080/accounts/large_account/reservations/01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f/release
 ```
 
 ```json
 {
   "id": "01a196fb-1600-7c4e-9f1d-3a5b6c7d8e9f",
-  "account_id": "acc_demo",
+  "account_id": "large_account",
   "bytes": 4194304,
   "status": "released",
   "created_at": "2026-11-01T12:00:00Z",
@@ -100,12 +100,12 @@ curl -i -X POST http://localhost:8080/accounts/acc_demo/reservations/01a196fb-16
 ## Usage
 
 ```sh
-curl -s http://localhost:8080/accounts/acc_demo/usage
+curl -s http://localhost:8080/accounts/large_account/usage
 ```
 
 ```json
 {
-  "account_id": "acc_demo",
+  "account_id": "large_account",
   "limit_bytes": 10737418240,
   "reserved_bytes": 4194304,
   "available_bytes": 10733223936,
@@ -125,9 +125,9 @@ curl -s http://localhost:8080/accounts/acc_demo/usage
 | Endpoint | `200` when | Body |
 |---|---|---|
 | `/healthz` | The process serves HTTP | `{"status":"ok"}` |
-| `/readyz` | The database answers | `{"database":"ok","limits":"ok"}`, where `limits` is `"unavailable"` while `MAX_PARALLEL_CHUNKS` is unknown |
+| `/readyz` | The database answers a ping | `{"database":"ok","limits":"ok"}`, where `limits` is `"unavailable"` while `MAX_PARALLEL_CHUNKS` is unknown. `limits` comes with the limit source (T04). |
 
-An unknown limit does not fail readiness, because release, usage and replays still work. `/readyz` returns `503` only when the database does not answer.
+An unknown limit does not fail readiness, because release, usage and replays still work. `/readyz` returns `503` only when the database does not answer, with `"database":"unavailable"` in the same body; the cause goes to the log with the request ID.
 
 ## Errors
 
@@ -151,16 +151,17 @@ X-Request-Id: c0a8f3e2b71d4e5f
 
 - `code` is stable, so clients branch on it. `detail` is written for humans and may change.
 - `type` points to the code's entry in the table below.
-- `5xx` responses never contain internal error text; `request_id` links them to the server logs.
+- `5xx` responses never contain internal error text; `request_id` links them to the server log, where the error is written.
+- Every request writes one access log line: `request_id`, method, path, status and duration.
 
 | `code` | Status | When | `detail` example | Extra fields | `Retry-After` |
 |---|---|---|---|---|---|
 | <a id="invalid_request"></a>`invalid_request` | 400 | Malformed JSON, unknown field, trailing data, or `bytes` not a positive 64-bit integer | "bytes must be a positive integer, got -5." | — | — |
 | <a id="invalid_idempotency_key"></a>`invalid_idempotency_key` | 400 | Header missing, empty, longer than 255 characters or not visible ASCII | "The Idempotency-Key header is required. Generate one key per logical request and reuse it on every retry." | — | — |
-| <a id="account_not_found"></a>`account_not_found` | 404 | Unknown account | "Account 'acc_x' does not exist." | — | — |
-| <a id="reservation_not_found"></a>`reservation_not_found` | 404 | Unknown reservation, or one owned by another account | "Reservation '01a1…' does not exist for account 'acc_demo'." | — | — |
+| <a id="account_not_found"></a>`account_not_found` | 404 | Unknown account | "Account 'unknown_account' does not exist." | — | — |
+| <a id="reservation_not_found"></a>`reservation_not_found` | 404 | Unknown reservation, or one owned by another account | "Reservation '01a1…' does not exist for account 'large_account'." | — | — |
 | <a id="request_in_progress"></a>`request_in_progress` | 409 | The same key is still being processed | "A request with this Idempotency-Key is still being processed. Retry in a moment to get its result." | — | 1 |
-| <a id="too_many_active_reservations"></a>`too_many_active_reservations` | 409 | `active_reservations ≥ MAX_PARALLEL_CHUNKS` | "You already have 5 active reservations, the maximum allowed. Release a reservation before creating a new one." | `active_reservations`, `max_active_reservations` | — |
+| <a id="too_many_active_reservations"></a>`too_many_active_reservations` | 409 | `active_reservations ≥ MAX_PARALLEL_CHUNKS` | "You have 5 active reservations and the maximum is 5. Release a reservation before creating a new one." | `active_reservations`, `max_active_reservations` | — |
 | <a id="insufficient_storage"></a>`insufficient_storage` | 409 | `bytes > limit − reserved` | "Requested 5.00 GiB but only 1.20 GiB is available (limit 10.00 GiB). Release a reservation or request less space." | `requested_bytes`, `available_bytes`, `limit_bytes` | — |
 | <a id="request_too_large"></a>`request_too_large` | 413 | Body over 4 KiB | "The request body must not exceed 4096 bytes." | — | — |
 | <a id="idempotency_key_reused"></a>`idempotency_key_reused` | 422 | Same key, different `bytes` | "This Idempotency-Key was already used to reserve 4194304 bytes. Use a new key for a new request." | `original_bytes` | — |

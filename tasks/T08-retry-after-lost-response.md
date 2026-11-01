@@ -24,7 +24,7 @@ Cases:
 
 ## User acceptance criteria
 
-The user is a client application. Account `acc_small`.
+The user is a client application. Account `small_account`.
 
 - Given a reservation was created with key K, when the app retries with K and the same size, then it gets `200`, the same reservation ID and `Idempotent-Replayed: true`, and usage is unchanged.
 - Given the app retries K ten times, then usage still shows a single reservation.

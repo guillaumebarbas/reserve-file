@@ -15,7 +15,7 @@ Full description: `docs/architecture.md`.
 ## Dependency rule
 
 - Dependencies point inward: `handler → service → domain ← repository/sqlite`.
-- Adapters never import each other. Only `internal/app` knows every package, and it wires them by hand.
+- Adapters never import each other in production code. Only `internal/app` knows every package, and it wires them by hand. An integration test may use another adapter, as `handler`'s `TestAPI_Readyz` opens a real `sqlite.Store`.
 - `cmd/api/main.go` stays trivial so that all the wiring is testable through `app.Run`.
 - An interface is declared by the package that uses it (`service/ports.go`, `limits.Store`), never next to its implementation.
 
@@ -29,6 +29,12 @@ Full description: `docs/architecture.md`.
 | JSON, status codes, headers, error messages | `handler` |
 | Call to env.hivenet.com and validation of its payload | `limits` |
 | Configuration, construction of the components, server lifecycle | `app` |
+
+## Folders and files
+
+- A folder is a package, not a namespace as in Java: its unexported names are invisible to every other folder. So no sub-folder per category (`domain/errors/`, `handler/middleware/`): it would hide the aggregate's private counters from its own rules, force exporting what is shared (`writeError`, `requestIDFrom`), and an `errors` package would clash with the standard library's.
+- Inside a package, one file per concept, named after it: `domain/account.go`, `domain/errors.go`, `handler/middleware.go`, `handler/errors.go`, `handler/json.go`, `handler/reservations.go`. Its tests sit next to it in `<file>_test.go`.
+- A new package only for a new responsibility with its own API and dependencies, as `repository/sqlite` and `limits` are.
 
 ## Domain model: objects, the Go way
 

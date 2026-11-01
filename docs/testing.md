@@ -9,7 +9,7 @@ How the service is tested. The tests themselves are listed in the tickets ([task
 - **Test first.** Each behaviour starts as a failing test (red, green, refactor).
 - **Real database.** Anything involving a transaction runs against a real SQLite file in `t.TempDir()`. Never `:memory:`: with the `database/sql` connection pool, each connection would open its own empty database.
 - **No mocking framework.** Ports are replaced by small hand-written fakes.
-- **Invariants everywhere.** Every repository and API test ends with `assertInvariants(t, db)`, which checks I1 and I2 from [consistency.md](consistency.md#invariants).
+- **Invariants everywhere.** Every repository and API test ends with `assertInvariants(t, database)`, which checks I1 and I2 from [consistency.md](consistency.md#invariants).
 - **Race detector.** The suite runs with `-race` inside the `golang` image, because the race detector needs a C toolchain that the host may not have.
 
 ## Test types
@@ -47,22 +47,21 @@ Unit and integration tests live next to the code they test and run together. Why
 
 ## Concurrency tests
 
-They start every goroutine at the same instant and count every outcome:
+They start every goroutine at the same instant: each one waits on `start`, which is closed once all of them are launched. `candidate(requestNumber)` builds a request with its own key, `key-<requestNumber>`. After `workers.Wait()`, the test counts the successes and each error type, then checks the invariants:
 
 ```go
 start := make(chan struct{})
-var wg sync.WaitGroup
-errs := make([]error, n)
-for i := range n {
-	wg.Go(func() {
-		<-start // all goroutines are released together
-		_, _, errs[i] = repo.Reserve(ctx, candidate(i), maxActive) // candidate(i) uses the key "key-<i>"
+var workers sync.WaitGroup
+results := make([]error, requestCount)
+for requestNumber := range requestCount {
+	workers.Go(func() {
+		<-start
+		_, _, results[requestNumber] = repository.Reserve(ctx, candidate(requestNumber), maxActive)
 	})
 }
 close(start)
-wg.Wait()
-// count successes and each error type, then:
-assertInvariants(t, db)
+workers.Wait()
+assertInvariants(t, database)
 ```
 
 The invariant query must return no rows:
@@ -87,7 +86,7 @@ go test -tags e2e ./e2e/...      # container tests (needs Go and Docker)
 
 ## Demo script
 
-`scripts/demo.sh` runs against the Compose stack (`docker compose up -d`, then `docker compose run --rm demo`) and prints each step. It uses account `acc_small`: 100 MiB, with `MAX_PARALLEL_CHUNKS` = 5. It checks that nothing is reserved before it starts and releases what it created at the end, so it can be run again.
+`scripts/demo.sh` runs against the Compose stack (`docker compose up -d`, then `docker compose run --rm demo`) and prints each step. It uses account `small_account`: 100 MiB, with `MAX_PARALLEL_CHUNKS` = 5. It checks that nothing is reserved before it starts and releases what it created at the end, so it can be run again.
 
 1. Show usage before anything.
 2. Reserve 30 MiB: `201`.

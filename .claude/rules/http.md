@@ -7,7 +7,7 @@ paths:
 
 `docs/api.md` is the contract: paths, status codes, headers, error codes and messages. If the contract has to change, update it first, with the user's agreement.
 
-- Standard library router: `mux.HandleFunc("POST /accounts/{accountID}/reservations", h.reserve)`; read path values with `r.PathValue("accountID")`.
+- Standard library router: `routes.HandleFunc("POST /accounts/{accountID}/reservations", handlers.reserve)`; read path values with `request.PathValue("accountID")`.
 - Handlers stay thin: parse and validate the input, call the service, write the response. No business rule, no SQL.
 - Request and response bodies are dedicated structs with snake_case `json` tags, separate from domain types.
 - Decode strictly: `http.MaxBytesReader` (4 KiB), `DisallowUnknownFields`, reject trailing data, and decode `bytes` into `*int64` to tell a missing field from zero.

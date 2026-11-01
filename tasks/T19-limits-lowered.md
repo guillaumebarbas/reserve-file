@@ -25,7 +25,7 @@ Nothing is revoked: existing reservations stay active, and new ones are refused 
 
 ## User acceptance criteria
 
-The user is a client application. Account `acc_small`.
+The user is a client application. Account `small_account`.
 
 - Given 90 MiB are reserved, when the limit is lowered to 50 MiB, then the reservations stay active, usage shows `available_bytes: 0`, a new reservation gets `409 insufficient_storage`, and releases work.
 - Given 5 reservations are active, when `MAX_PARALLEL_CHUNKS` drops to 3, then new reservations get `409 too_many_active_reservations` until fewer than 3 are active.

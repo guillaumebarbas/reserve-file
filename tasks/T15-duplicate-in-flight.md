@@ -25,7 +25,7 @@ Before this ticket, the second request waits for the database lock and then gets
 
 ## User acceptance criteria
 
-The user is a client application. Account `acc_small`.
+The user is a client application. Account `small_account`.
 
 - Given a request with key K is still being processed, when another request with K arrives, then it gets `409 request_in_progress` with `Retry-After: 1`; retrying a moment later returns the reservation.
 - Given 50 requests with the same key arrive at once, then exactly one reservation exists; one response is `201` and the others are `200` or `409`.

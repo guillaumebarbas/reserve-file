@@ -9,39 +9,39 @@ import (
 )
 
 type Config struct {
-	HTTPAddr     string
+	HTTPAddress  string
 	LogLevel     slog.Level
-	DBPath       string
+	DatabasePath string
 	SeedAccounts map[string]int64
 }
 
-func loadConfig(getenv func(string) string) (Config, error) {
+func loadConfig(getEnvironmentVariable func(string) string) (Config, error) {
 	config := Config{
-		HTTPAddr:     ":8080",
+		HTTPAddress:  ":8080",
 		LogLevel:     slog.LevelInfo,
-		DBPath:       "/data/reserve.db",
-		SeedAccounts: map[string]int64{"acc_demo": 10737418240, "acc_small": 104857600},
+		DatabasePath: "/data/reserve.db",
+		SeedAccounts: map[string]int64{"large_account": 10737418240, "small_account": 104857600},
 	}
 
-	if value := getenv("HTTP_ADDR"); value != "" {
-		config.HTTPAddr = value
+	if httpAddress := getEnvironmentVariable("HTTP_ADDR"); httpAddress != "" {
+		config.HTTPAddress = httpAddress
 	}
-	if _, _, err := net.SplitHostPort(config.HTTPAddr); err != nil {
+	if _, _, err := net.SplitHostPort(config.HTTPAddress); err != nil {
 		return Config{}, fmt.Errorf("HTTP_ADDR: %w", err)
 	}
 
-	if value := getenv("LOG_LEVEL"); value != "" {
-		if err := config.LogLevel.UnmarshalText([]byte(value)); err != nil {
+	if logLevel := getEnvironmentVariable("LOG_LEVEL"); logLevel != "" {
+		if err := config.LogLevel.UnmarshalText([]byte(logLevel)); err != nil {
 			return Config{}, fmt.Errorf("LOG_LEVEL: %w", err)
 		}
 	}
 
-	if value := getenv("DB_PATH"); value != "" {
-		config.DBPath = value
+	if databasePath := getEnvironmentVariable("DB_PATH"); databasePath != "" {
+		config.DatabasePath = databasePath
 	}
 
-	if value := getenv("SEED_ACCOUNTS"); value != "" {
-		accounts, err := parseSeedAccounts(value)
+	if seedAccounts := getEnvironmentVariable("SEED_ACCOUNTS"); seedAccounts != "" {
+		accounts, err := parseSeedAccounts(seedAccounts)
 		if err != nil {
 			return Config{}, fmt.Errorf("SEED_ACCOUNTS: %w", err)
 		}
@@ -51,22 +51,22 @@ func loadConfig(getenv func(string) string) (Config, error) {
 	return config, nil
 }
 
-func parseSeedAccounts(value string) (map[string]int64, error) {
+func parseSeedAccounts(seedAccounts string) (map[string]int64, error) {
 	accounts := make(map[string]int64)
-	for _, entry := range strings.Split(value, ",") {
-		id, limit, found := strings.Cut(entry, ":")
-		id = strings.TrimSpace(id)
-		if !found || id == "" {
+	for _, entry := range strings.Split(seedAccounts, ",") {
+		accountID, limitText, found := strings.Cut(entry, ":")
+		accountID = strings.TrimSpace(accountID)
+		if !found || accountID == "" {
 			return nil, fmt.Errorf("entry %q: want <account id>:<limit in bytes>", entry)
 		}
-		limitBytes, err := strconv.ParseInt(strings.TrimSpace(limit), 10, 64)
+		limitBytes, err := strconv.ParseInt(strings.TrimSpace(limitText), 10, 64)
 		if err != nil || limitBytes < 0 {
 			return nil, fmt.Errorf("entry %q: the limit must be a whole number of bytes, 0 or more", entry)
 		}
-		if _, listed := accounts[id]; listed {
-			return nil, fmt.Errorf("account %q is listed twice", id)
+		if _, listed := accounts[accountID]; listed {
+			return nil, fmt.Errorf("account %q is listed twice", accountID)
 		}
-		accounts[id] = limitBytes
+		accounts[accountID] = limitBytes
 	}
 	return accounts, nil
 }
