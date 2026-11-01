@@ -198,6 +198,23 @@ docker compose restart api
 
 On `docker compose stop` (SIGTERM), the server stops accepting connections, lets the requests in progress finish, then closes the database; the log ends with `server stopped`.
 
+### Container tests
+
+They test the packaged service the way a reviewer runs it, so they need Go and Docker on the host:
+
+```sh
+go test -tags e2e ./e2e/...
+```
+
+They build the image and start it with `compose.yaml` plus [compose.e2e.yaml](compose.e2e.yaml), as Compose project `reserve-e2e` on port 18090, so a stack you already run is untouched. An nginx container stands in for env.hivenet.com with a fixed `MAX_PARALLEL_CHUNKS` of 5. Each test starts from a fresh volume, waits for `/readyz`, and removes its containers, volume and image at the end, even after a failure. They prove what in-process tests cannot see:
+- the process runs as the non-root user 65532 and writes its database on the volume;
+- the main flow, and 20 concurrent requests that never exceed the limit, over the network;
+- reservations, counters and idempotency keys survive `docker compose restart` and `docker compose kill -s SIGKILL`;
+- SIGTERM stops the service in under 10 s with exit code 0, and the log ends with `server stopped`;
+- with the limit source down, a restart reloads the last value from the database, and a first start without it refuses new reservations with `503 limit_unavailable` while usage still answers.
+
+A run takes about two minutes, most of it the first image build. The build tag keeps them out of `go test ./...` and of the coverage check.
+
 ## Design
 
 How reservations work; the endpoints are being built in T05 to T09.

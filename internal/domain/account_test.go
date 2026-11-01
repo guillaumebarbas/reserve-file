@@ -43,6 +43,7 @@ func TestRestoreAccount_KeepsCounters(t *testing.T) {
 func TestAccount_Reserve(t *testing.T) {
 	knownLimit := MaxActive{Value: 5, Known: true}
 	existingReservation := Reservation{ID: "existing_reservation", AccountID: "small_account", IdempotencyKey: "key_1", Bytes: 30, Status: StatusActive}
+	releasedReservation := Reservation{ID: "released_reservation", AccountID: "small_account", IdempotencyKey: "key_1", Bytes: 30, Status: StatusReleased}
 	testCases := []struct {
 		name                   string
 		limitBytes             int64
@@ -64,11 +65,16 @@ func TestAccount_Reserve(t *testing.T) {
 		{name: "all_slots_used_checked_before_space", limitBytes: 100, reservedBytes: 99, activeReservations: 5, maxActive: knownLimit, requestedBytes: 50, wantErr: TooManyActiveReservationsError{ActiveReservations: 5, MaxActiveReservations: 5}, wantReservedBytes: 99, wantActiveReservations: 5},
 		{name: "limit_unknown_checked_first", limitBytes: 100, activeReservations: 5, maxActive: MaxActive{}, requestedBytes: 500, wantErr: ErrLimitUnavailable, wantActiveReservations: 5},
 		{name: "usage_above_a_lowered_limit", limitBytes: 50, reservedBytes: 80, activeReservations: 1, maxActive: knownLimit, requestedBytes: 1, wantErr: InsufficientStorageError{RequestedBytes: 1, AvailableBytes: 0, LimitBytes: 50}, wantReservedBytes: 80, wantActiveReservations: 1},
+		{name: "active_reservations_above_a_lowered_maximum", limitBytes: 100, reservedBytes: 50, activeReservations: 5, maxActive: MaxActive{Value: 3, Known: true}, requestedBytes: 10, wantErr: TooManyActiveReservationsError{ActiveReservations: 5, MaxActiveReservations: 3}, wantReservedBytes: 50, wantActiveReservations: 5},
 		{name: "near_max_int64_fits", limitBytes: math.MaxInt64, reservedBytes: math.MaxInt64 - 10, activeReservations: 1, maxActive: knownLimit, requestedBytes: 10, wantOutcome: Created, wantReservationID: "reservation_1", wantReservedBytes: math.MaxInt64, wantActiveReservations: 2},
 		{name: "near_max_int64_does_not_overflow", limitBytes: math.MaxInt64, reservedBytes: math.MaxInt64 - 10, activeReservations: 1, maxActive: knownLimit, requestedBytes: 11, wantErr: InsufficientStorageError{RequestedBytes: 11, AvailableBytes: 10, LimitBytes: math.MaxInt64}, wantReservedBytes: math.MaxInt64 - 10, wantActiveReservations: 1},
 		{name: "zero_bytes", limitBytes: 100, maxActive: knownLimit, requestedBytes: 0, wantErr: ErrBytesNotPositive},
 		{name: "negative_bytes", limitBytes: 100, maxActive: knownLimit, requestedBytes: -5, wantErr: ErrBytesNotPositive},
 		{name: "existing_key_with_the_same_bytes_replays", limitBytes: 100, reservedBytes: 30, activeReservations: 1, existing: &existingReservation, maxActive: knownLimit, requestedBytes: 30, wantOutcome: Replayed, wantReservationID: "existing_reservation", wantReservedBytes: 30, wantActiveReservations: 1},
+		{name: "replay_when_the_account_is_full", limitBytes: 100, reservedBytes: 100, activeReservations: 2, existing: &existingReservation, maxActive: knownLimit, requestedBytes: 30, wantOutcome: Replayed, wantReservationID: "existing_reservation", wantReservedBytes: 100, wantActiveReservations: 2},
+		{name: "replay_when_every_slot_is_used_including_its_own", limitBytes: 100, reservedBytes: 50, activeReservations: 5, existing: &existingReservation, maxActive: knownLimit, requestedBytes: 30, wantOutcome: Replayed, wantReservationID: "existing_reservation", wantReservedBytes: 50, wantActiveReservations: 5},
+		{name: "replay_when_the_limit_is_unknown", limitBytes: 100, reservedBytes: 30, activeReservations: 1, existing: &existingReservation, maxActive: MaxActive{}, requestedBytes: 30, wantOutcome: Replayed, wantReservationID: "existing_reservation", wantReservedBytes: 30, wantActiveReservations: 1},
+		{name: "replay_of_a_released_reservation", limitBytes: 100, maxActive: knownLimit, requestedBytes: 30, existing: &releasedReservation, wantOutcome: Replayed, wantReservationID: "released_reservation"},
 		{name: "replay_comes_before_every_admission_rule", limitBytes: 30, reservedBytes: 30, activeReservations: 5, existing: &existingReservation, maxActive: MaxActive{}, requestedBytes: 30, wantOutcome: Replayed, wantReservationID: "existing_reservation", wantReservedBytes: 30, wantActiveReservations: 5},
 		{name: "existing_key_with_other_bytes_is_refused", limitBytes: 100, reservedBytes: 30, activeReservations: 1, existing: &existingReservation, maxActive: knownLimit, requestedBytes: 31, wantErr: IdempotencyKeyReusedError{OriginalBytes: 30}, wantReservedBytes: 30, wantActiveReservations: 1},
 		{name: "key_reuse_comes_before_every_admission_rule", limitBytes: 30, reservedBytes: 30, activeReservations: 5, existing: &existingReservation, maxActive: MaxActive{}, requestedBytes: 50, wantErr: IdempotencyKeyReusedError{OriginalBytes: 30}, wantReservedBytes: 30, wantActiveReservations: 5},

@@ -140,7 +140,7 @@ Concurrent requests with different keys are not refused for being concurrent: pa
 
 Measured before `_txlock=immediate` (T07): in WAL mode the limit was never exceeded, because a transaction that read an older snapshot cannot write. But 7 to 19 of 50 concurrent requests failed to upgrade their read lock to a write lock, with `SQLITE_BUSY`, and got `503` instead of their real answer: `busy_timeout` cannot help a transaction whose snapshot is stale. With `BEGIN IMMEDIATE`, each request waits for the lock, then reads the state left by the previous one.
 
-**Proved by.** `TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestAPI_ConcurrentReservations`, `TestReserveRelease_ConcurrentMix`.
+**Proved by.** `TestReserve_ConcurrentRequestsNeverExceedLimit`, `TestReserve_ConcurrentRequestsNeverExceedSlots`, `TestAPI_ConcurrentReservations`, `TestReserveRelease_ConcurrentMix`, and over the network `TestContainer_ConcurrentBurstRespectsLimit`.
 
 ### P2 — The response is lost and the client retries
 
@@ -158,7 +158,9 @@ Measured before `_txlock=immediate` (T07): in WAL mode the limit was never excee
 
 The guard is a convenience. The `UNIQUE (account_id, idempotency_key)` constraint is what makes a second row impossible. If the constraint ever fires (it cannot with one instance), the request also gets `409 request_in_progress`.
 
-**Proved by.** `TestService_DuplicateInFlightReturnsInProgress`, `TestReserve_ConcurrentSameKeyCreatesOneRow`, `TestReserve_UniqueViolationMapsToInProgress`, `TestAPI_ConcurrentSameKey`.
+The guard is a mutex and a map of `(account_id, idempotency_key)` pairs in `service`, taken before any database access and released with `defer`, so an error or a panic never leaves a key stuck. Release does not go through it.
+
+**Proved by.** `TestService_DuplicateInFlightReturnsInProgress`, `TestService_DifferentKeysAreNotBlocked`, `TestService_SameKeyOnDifferentAccountsIsNotBlocked`, `TestService_GuardReleasedAfterError`, `TestService_GuardReleasedAfterPanic`, `TestReserve_ConcurrentSameKeyCreatesOneRow` (no guard at that layer: the database alone makes one row), `TestReserve_UniqueViolationMapsToInProgress`, `TestAPI_ConcurrentSameKey`.
 
 ### P4 — A key is reused for a different request
 
@@ -172,9 +174,9 @@ The guard is a convenience. The `UNIQUE (account_id, idempotency_key)` constrain
 
 **Problem.** When the retry arrives, the account may be full, all slots may be taken (possibly by this very reservation), the limit source may be down, or the reservation may already be released.
 
-**Solution.** The idempotency lookup comes before every other check, so all these retries return the original reservation. A released reservation is returned as released and never created again.
+**Solution.** The idempotency lookup comes before every other check, so all these retries return the original reservation. A released reservation is returned as released, with its `released_at`, and never created again. The reserve transaction still reads the account row, which must exist, and the service still reads the cached `MAX_PARALLEL_CHUNKS`, but the answer to a known key is decided before any limit, slot or space rule uses them.
 
-**Proved by.** `TestAccount_Reserve` (replay cases).
+**Proved by.** `TestAccount_Reserve` (replay cases), `TestReserve_ReplayOfReleasedReservation`, `TestReserve_ReplayWhenAccountFull`, `TestReserve_ReplayWhenEverySlotIsUsed`, `TestReserve_ReplayWhenLimitUnknown`, `TestAPI_ReplayOfReleasedReservation`, `TestAPI_ReplayWhenAccountFull`, `TestAPI_ReplayWhenLimitUnknown`.
 
 ### P6 — Double release and concurrent releases
 
@@ -182,11 +184,11 @@ The guard is a convenience. The `UNIQUE (account_id, idempotency_key)` constrain
 
 **Solution.** `Account.Release` gives the space back only on a real `active → released` transition, and changes nothing on a reservation already released. The `UPDATE … WHERE status = 'active'` that saves it is a second guard. Later calls return `200` with the same body.
 
-An unknown reservation, or one owned by another account, gets `404` rather than `403`, so the service does not reveal that it exists.
+An unknown or malformed ID, or a reservation owned by another account, gets the same `404 reservation_not_found`, rather than a `403` or a `400`, so the service does not reveal that a reservation exists in another account. Nothing is written: the read is scoped by `account_id`, so the other account's reservation and counters are never touched.
 
 With `BEGIN IMMEDIATE`, the reservation is read under the write lock, so the second guard can only refuse a row that something else changed in between; `TestRelease_RollsBackWhenTheRowIsNotUpdated` simulates that with a trigger, and the whole release rolls back.
 
-**Proved by.** `TestAccount_ReleaseTwice`, `TestRelease_Twice`, `TestRelease_ConcurrentReleasesCreditOnce`, `TestReserveRelease_ConcurrentMix`, `TestRelease_RollsBackWhenTheRowIsNotUpdated`, `TestRelease_OtherAccountIsNotFound`, `TestAPI_ReleaseIdempotent`.
+**Proved by.** `TestAccount_ReleaseTwice`, `TestRelease_Twice`, `TestRelease_ConcurrentReleasesCreditOnce`, `TestReserveRelease_ConcurrentMix`, `TestRelease_RollsBackWhenTheRowIsNotUpdated`, `TestRelease_OtherAccountIsNotFound`, `TestGet_OtherAccountIsNotFound`, `TestAPI_ReleaseIdempotent`, `TestAPI_ReleaseUnknownAndForeignLookTheSame`.
 
 ### P7 — A limit drops below current usage
 
@@ -194,7 +196,9 @@ With `BEGIN IMMEDIATE`, the reservation is read under the write lock, so the sec
 
 **Solution.** Nothing is revoked ([D11](decisions.md#d11--lowered-limits-never-revoke-reservations)). New reservations are refused until usage is back under the limit; release, usage and replays keep working. `available_bytes` is reported as `max(0, limit − reserved)`.
 
-**Proved by.** `TestReserve_AfterStorageLimitLowered`, `TestReserve_AfterMaxActiveLowered`, `TestAccount_AvailableBytesNeverNegative`.
+A storage limit is lowered by an operator through `SEED_ACCOUNTS` at the next start: the seed updates `storage_limit_bytes` and never touches the counters ([D17](decisions.md#d17--accounts-seeded-from-configuration)). Usage then shows `reserved_bytes` above `limit_bytes` with `available_bytes: 0`, or `active_reservations` above `max_active_reservations`. The space check subtracts (`bytes > limit − reserved`), so a negative difference refuses without overflow, and every release brings usage back down until a reservation fits again.
+
+**Proved by.** `TestAccount_Reserve` (`usage_above_a_lowered_limit`, `active_reservations_above_a_lowered_maximum`), `TestAccount_AvailableBytesNeverNegative`, `TestReserve_AfterStorageLimitLowered`, `TestRelease_BringsUsageBackUnderALoweredLimit`, `TestReserve_AfterMaxActiveLowered`, `TestRelease_BringsActiveReservationsBackUnderALoweredMaximum`, `TestAPI_UsageAfterLimitLowered`, `TestAPI_ReleaseAfterLimitLowered`, `TestAPI_ReserveAfterMaxActiveLowered`, `TestRun_AppliesALoweredLimitAtRestart`.
 
 ### P8 — env.hivenet.com is down, slow or returns garbage
 
@@ -204,38 +208,45 @@ The value is never fetched on the request path ([D12](decisions.md#d12--external
 |---|---|
 | Down, `5xx` or slower than 3 s, after a value was obtained | The last valid value is kept (memory and database), a warning is logged without the payload, and the next fetch comes after the normal 60 s: a valid value is in use, so there is no hurry |
 | The service restarts during the outage | The last valid value is reloaded from `settings`. A save that failed is retried at the next refresh, so the stored value does not lag behind |
-| First start during an outage, nothing stored | New reservations get `503 limit_unavailable` with `Retry-After`; release, usage, `GET` and replays are unaffected ([D13](decisions.md#d13--fail-closed-until-the-limit-is-known)). The fetch is retried after 1 s, then 2, 4, 8, 16 and every 30 s, until a value is obtained; from then on the normal 60 s applies |
+| First start during an outage, nothing stored | New reservations get `503 limit_unavailable` with `Retry-After: 5`; release, usage (`max_active_reservations: null`), `GET` and replays are unaffected, and `/readyz` answers `200` with `"limits":"unavailable"` ([D13](decisions.md#d13--fail-closed-until-the-limit-is-known)). The fetch is retried after 1 s, then 2, 4, 8, 16 and every 30 s, until a value is obtained; from then on the normal 60 s applies, and new reservations are accepted without a restart |
 | Key missing, `"5"`, `5.5`, `0`, a negative number, invalid JSON, body over 1 MiB | The value is rejected and the previous one kept |
 | The value increases | It applies from the next refresh (within 60 s) |
 | The value decreases | See P7 |
 
 The payload contains analytics tokens and is never logged.
 
-**Proved by.** `TestFetcher_RejectsInvalidResponses`, `TestLimits_KeepsLastValidValueOnFailure`, `TestLimits_KeepsLastValidValueWhenSourceTimesOut`, `TestLimits_NeverLogsBody`, `TestLimits_ReloadsPersistedValue`, `TestLimits_RetriesSaveAfterFailure`, `TestLimits_RetriesWithBackoffWhileUnknown`, `TestLimits_UnknownUntilFirstSuccess`, `TestAPI_ReserveWhenLimitUnknown`.
+**Proved by.** `TestFetcher_RejectsInvalidResponses`, `TestLimits_KeepsLastValidValueOnFailure`, `TestLimits_KeepsLastValidValueWhenSourceTimesOut`, `TestLimits_NeverLogsBody`, `TestLimits_ReloadsPersistedValue`, `TestLimits_RetriesSaveAfterFailure`, `TestLimits_RetriesWithBackoffWhileUnknown`, `TestLimits_UnknownUntilFirstSuccess`, `TestAPI_ReserveWhenLimitUnknown`, `TestAPI_ReleaseWhenLimitUnknown`, `TestAPI_ReplayAndReadWhenLimitUnknown`, `TestAPI_UsageWhenLimitUnknown`, `TestRun_FirstStartDuringOutage`, `TestRun_KeepsReservingWhenSourceGoesDown`, `TestRun_RestartDuringOutageKeepsTheLastLimit`, and in the container `TestContainer_LimitSourceDownKeepsLastValue`, `TestContainer_FirstStartWithoutLimitSource`.
 
 ### P9 — The database is unavailable
 
 **Problem.** The lock is held longer than `busy_timeout`, the disk is full, an I/O error occurs, or the database is closed.
 
-**Solution.** Each operation is a single transaction: on error it rolls back, so nothing is partially applied. The repository maps these errors to `ErrServiceUnavailable`, which the API returns as `503 service_unavailable` with `Retry-After: 1`. Retrying with the same key is safe. `/readyz` reports the database as down.
+**Solution.** Each operation is a single transaction: on error it rolls back, so nothing is partially applied. The repository maps these errors to `ErrServiceUnavailable`, which the API returns as `503 service_unavailable` with `Retry-After: 1`. The body carries no internal text; the cause goes to the log with the request ID. Retrying with the same key is safe. `/readyz` reports the database as down.
 
-**Proved by.** `TestReserve_DatabaseLockedReturnsUnavailable`, `TestRepository_ClosedDatabaseReturnsUnavailable`, `TestRepository_ReadOnlyDatabaseReturnsUnavailable`, `TestRepository_DiskFullReturnsUnavailable`, `TestReserve_CounterUpdateFailureRollsBack`, `TestRelease_CounterUpdateFailureRollsBack`, `TestAPI_DatabaseClosedReturns503`.
+Every driver error takes the same path through `translateDriverError`, so an I/O error, which no test can provoke reliably, gets the same answer as a lock, a full disk, a read-only file or a closed database.
+
+**Proved by.** `TestReserve_DatabaseLockedReturnsUnavailable`, `TestRelease_DatabaseLockedReturnsUnavailable`, `TestRepository_DiskFullReturnsUnavailable`, `TestRepository_ReadOnlyDatabaseReturnsUnavailable`, `TestReserve_DatabaseUnavailable` and `TestRelease_DatabaseUnavailable` (closed database), `TestReserve_FailureMidTransactionWritesNothing`, `TestRelease_FailureMidTransactionWritesNothing`, `TestAPI_DatabaseClosedReturns503`, `TestAPI_RetryAfterDatabaseRecovers`, `TestAPI_Readyz`.
 
 ### P10 — Crashes
 
 | When | Outcome |
 |---|---|
+| A statement fails during a transaction | The deferred `Rollback` undoes every statement before it; a retry with the same key then reserves or releases exactly once |
 | During a transaction | SQLite discards it when the file is next opened |
 | After `COMMIT`, before the response | The client retries with the same key and gets a replay (P2) |
 | Power loss after a `201` | `synchronous=FULL`: the commit is on disk |
 
-**Proved by.** `TestRepository_ReopenKeepsState`, `TestContainer_SigkillKeepsCommittedReservations` and the P2 tests. Atomic commit is SQLite's own guarantee and is not re-tested.
+Every statement of the reserve transaction (account read, key lookup, insert, counter update) and of the release transaction (account read, reservation read, reservation update, counter update) is made to fail in turn: none leaves a row without its counters, nor the reverse. A failing `COMMIT` cannot be injected deterministically (no deferred constraint, and in WAL mode a commit does not wait for readers); a context cancelled just before it covers that point instead (P11).
+
+**Proved by.** `TestReserve_RetryAfterAFailedStatementCreatesOnce`, `TestRelease_RetryAfterAFailedStatementReleasesOnce`, `TestReserve_FailureMidTransactionWritesNothing`, `TestRelease_FailureMidTransactionWritesNothing`, `TestReserve_KeyLookupFailureWritesNothing`, `TestRepository_ReopenKeepsState`, `TestContainer_SigkillKeepsCommittedReservations` and the P2 tests. Atomic commit is SQLite's own guarantee and is not re-tested.
 
 ### P11 — The client disconnects mid-request
 
 The request context is cancelled. The transaction either commits or rolls back; it never half-applies. The client cannot tell which, so it retries with the same key and gets either a replay or a fresh execution. There is no duplicate in either case.
 
-**Proved by.** `TestReserve_CancelledContextRollsBack`.
+`database/sql` watches the context of each transaction: once it is cancelled, the next statement refuses to run (the statement in progress may also be interrupted), `Commit` returns the context error instead of committing, and the transaction is rolled back. So a disconnect before the commit always rolls back, wherever it happens, and the store answers `ErrServiceUnavailable`, which the client never sees since it is gone. The tests cancel the context from inside the transaction, through a trigger that calls a SQL function registered by the test: after the insert, after the reservation update, and after the counter update, just before the commit.
+
+**Proved by.** `TestReserve_CancelledContextRollsBack`, `TestRelease_CancelledContextRollsBack`.
 
 ### P12 — Restart and shutdown
 
