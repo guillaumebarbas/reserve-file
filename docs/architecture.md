@@ -33,6 +33,8 @@ Adapters implement the ports declared in `service` without importing it, because
 | `app` | Every internal package | — |
 | `cmd/api` | `app` | Every other internal package |
 
+The table is about production code. An integration test may use another adapter: `handler`'s `TestAPI_Readyz` opens a real `sqlite.Store`. `go list -f '{{.Imports}}' ./internal/...` shows the production imports only.
+
 ## Package layout
 
 ```

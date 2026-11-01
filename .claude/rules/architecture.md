@@ -15,7 +15,7 @@ Full description: `docs/architecture.md`.
 ## Dependency rule
 
 - Dependencies point inward: `handler → service → domain ← repository/sqlite`.
-- Adapters never import each other. Only `internal/app` knows every package, and it wires them by hand.
+- Adapters never import each other in production code. Only `internal/app` knows every package, and it wires them by hand. An integration test may use another adapter, as `handler`'s `TestAPI_Readyz` opens a real `sqlite.Store`.
 - `cmd/api/main.go` stays trivial so that all the wiring is testable through `app.Run`.
 - An interface is declared by the package that uses it (`service/ports.go`, `limits.Store`), never next to its implementation.
 
