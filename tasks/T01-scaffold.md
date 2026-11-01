@@ -46,7 +46,7 @@ Unit (`internal/app`):
 - [ ] `TestLoadConfig_InvalidValues` — table: unknown log level, malformed address. The error names the variable.
 
 Integration (`internal/app`, `internal/handler`):
-- [ ] `TestHealthz` — `200`, JSON body, `Content-Type: application/json`.
+- [x] `TestHealthz` — `200`, JSON body, `Content-Type: application/json`.
 - [ ] `TestRun_ServesUntilContextCancelled` — `Run` on `127.0.0.1:0` answers `/healthz`, then returns `nil` once the context is cancelled.
 - [ ] `TestRun_FailsWhenAddressInUse` — returns an error instead of hanging.
 - [ ] `TestHealthcheck_HealthyAndUnhealthy` — exit status 0 against a running server, 1 against a closed port.
