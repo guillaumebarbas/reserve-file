@@ -15,8 +15,9 @@ The reader is new to Go: choose the most obvious construct, not the shortest or 
 
 - Packages: short, lowercase, singular, no underscores (`domain`, `sqlite`, `limits`).
 - No stutter: `service.New`, not `service.NewReservationService`.
-- Short names only where Go convention expects them: `ctx`, `err`, `tx`, `db`, `w`, `r`, `t`, `i`, and one- or two-letter receivers (`s *Service`). Everything else gets a descriptive name: `reservedBytes`, not `rb`.
-- Initialisms keep a single case: `accountID`, `requestID`, `URL`, `HTTPAddr`.
+- Every name says what it holds or does, in full words: variables, parameters, receivers, struct fields, functions, test helpers and test data (`accountID`, `serving`, `routes`, `writer`, `request`, `store`, `testCase`, `transaction`, `large_account`). No abbreviation: `reservedBytes`, not `rb`; `database`, not `db`.
+- The only short names are Go's universal ones: `ctx`, `err` and `t`, with their compounds (`shutdownCtx`, `serveErr`), and `got` / `want` in tests. Common words such as `config` are not abbreviations.
+- Initialisms keep a single case: `accountID`, `requestID`, `URL`, `HTTPAddress`.
 - Booleans read as statements: `known`, `replayed`, `exists`.
 - Quantities carry their unit: `limitBytes`, `availableBytes`. Durations are `time.Duration`, never plain integers.
 
