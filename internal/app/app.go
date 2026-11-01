@@ -13,6 +13,7 @@ import (
 
 	"github.com/guillaumebarbas/reserve-file/internal/handler"
 	"github.com/guillaumebarbas/reserve-file/internal/repository/sqlite"
+	"github.com/guillaumebarbas/reserve-file/internal/service"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -30,7 +31,7 @@ func Run(ctx context.Context, arguments []string, getEnvironmentVariable func(st
 	if err != nil {
 		return err
 	}
-	routes := handler.New(logger, store)
+	routes := handler.New(logger, store, service.New(store, limitNotLoadedYet{}))
 	serveErr := serveUntilCancelled(ctx, config.HTTPAddress, routes, logger)
 	return errors.Join(serveErr, store.Close())
 }

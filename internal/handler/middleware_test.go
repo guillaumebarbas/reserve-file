@@ -12,7 +12,7 @@ import (
 )
 
 func TestRequestID_SetOnEveryResponse(t *testing.T) {
-	routes := New(slog.New(slog.DiscardHandler), nil)
+	routes := New(slog.New(slog.DiscardHandler), nil, nil)
 	paths := []string{"/healthz", "/healthz", "/unknown"}
 	seenRequestIDs := map[string]bool{}
 
@@ -42,7 +42,7 @@ type accessLogRecord struct {
 
 func TestAccessLog_LogsEveryRequest(t *testing.T) {
 	var logOutput bytes.Buffer
-	routes := New(slog.New(slog.NewJSONHandler(&logOutput, nil)), nil)
+	routes := New(slog.New(slog.NewJSONHandler(&logOutput, nil)), nil, nil)
 	recorder := httptest.NewRecorder()
 
 	routes.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/unknown", nil))

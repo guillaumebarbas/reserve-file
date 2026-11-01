@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+
+	"github.com/guillaumebarbas/reserve-file/internal/service"
 )
 
 type DatabasePinger interface {
@@ -13,6 +15,7 @@ type DatabasePinger interface {
 type apiHandlers struct {
 	logger   *slog.Logger
 	database DatabasePinger
+	storage  *service.Service
 }
 
 type livenessBody struct {
@@ -23,11 +26,12 @@ type readinessBody struct {
 	Database string `json:"database"`
 }
 
-func New(logger *slog.Logger, database DatabasePinger) http.Handler {
-	handlers := &apiHandlers{logger: logger, database: database}
+func New(logger *slog.Logger, database DatabasePinger, storage *service.Service) http.Handler {
+	handlers := &apiHandlers{logger: logger, database: database, storage: storage}
 	routes := http.NewServeMux()
 	routes.HandleFunc("GET /healthz", handlers.reportLiveness)
 	routes.HandleFunc("GET /readyz", handlers.reportReadiness)
+	routes.HandleFunc("GET /accounts/{accountID}/usage", handlers.reportUsage)
 	return withRequestID(withAccessLog(logger, withPanicRecovery(handlers, routes)))
 }
 
