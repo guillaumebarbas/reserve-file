@@ -38,7 +38,7 @@ The reader is new to Go: choose the most obvious construct, not the shortest or 
 
 ## Types
 
-- Constructors are named `New…` and return concrete types (`*Service`), not interfaces.
+- Constructors are named `New…` and return concrete types (`*Service`), not interfaces. An aggregate rebuilt from storage uses `Restore…` (`domain.RestoreAccount`).
 - Byte counts are `int64`. Check capacity with a subtraction (`bytes > limit-reserved`), never with an addition that can overflow.
 - Times are `time.Time` in UTC. Code that needs the current time receives a clock (`now func() time.Time`).
 - No `any` in signatures, no generics, no reflection, unless the user agrees that it removes real duplication.

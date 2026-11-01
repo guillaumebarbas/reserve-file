@@ -8,11 +8,11 @@ How the code is organized and how a request travels through it. The reasons behi
 
 ```
 HTTP ──► handler ──────────► service ──────────► domain
-         JSON and DTOs,       use cases,          entities, pure admission
-         validation,          in-flight guard     rules, typed errors
-         problem+json
+         JSON and DTOs,       use cases,          Account aggregate:
+         validation,          in-flight guard     rules as methods,
+         problem+json                             typed errors
                                 │         │
-              ReservationRepository     LimitProvider      ports, declared in service
+                AccountRepository       LimitProvider      ports, declared in service
                                 │         │
                                 ▼         ▼
                    repository/sqlite     limits ──► https://env.hivenet.com/dev
@@ -40,17 +40,18 @@ cmd/api/main.go               signal handling; calls app.Run, nothing else
 internal/
 ├── app/                      configuration, wiring, startup, graceful shutdown, healthcheck subcommand
 ├── domain/
-│   ├── reservation.go        Reservation, Status, AccountState, available bytes
-│   ├── reserve.go            DecideReserve: admission rules, pure
+│   ├── account.go            Account aggregate: Reserve, Release, AvailableBytes; RestoreAccount
+│   ├── reservation.go        Reservation, Status, Outcome, MaxActive
 │   └── errors.go             typed errors carrying facts, sentinel errors
 ├── service/
-│   ├── ports.go              ReservationRepository, LimitProvider
-│   ├── reservation.go        Reserve, Release, Get, Usage
+│   ├── ports.go              AccountRepository, LimitProvider
+│   ├── reservation.go        Reserve, Release, Reservation, Usage
 │   └── inflight.go           in-flight Idempotency-Key guard
 ├── repository/sqlite/
 │   ├── schema.sql            embedded, versioned with PRAGMA user_version
 │   ├── db.go                 Open: DSN, pragmas, migration, account seeding
-│   └── reservations.go       transactions, queries, driver error translation
+│   ├── accounts.go           AccountRepository: loading and saving the Account aggregate
+│   └── reservations.go       the reserve and release transactions, driver error translation
 ├── limits/                   MAX_PARALLEL_CHUNKS: fetch, validate, cache, refresh, persist
 └── handler/                  routes, middleware, request/response DTOs, problem+json
 scripts/demo.sh               end-to-end demo: retry, concurrency, release
@@ -60,32 +61,50 @@ scripts/demo.sh               end-to-end demo: retry, concurrency, release
 
 ## The transaction boundary
 
-The rule that decides whether a reservation is admitted must run inside the transaction that writes it. The repository owns the transaction; the domain owns the rule.
+The rules live on the `Account` aggregate; the repository runs them inside the transaction that writes their result ([D4](decisions.md#d4--layered-architecture-rules-inside-the-transaction), [D20](decisions.md#d20--a-rich-account-aggregate-with-private-counters)).
 
 ```go
-// domain: pure, no I/O, no clock
-type ReserveState struct {
-    Account  AccountState // Exists, LimitBytes, ReservedBytes, ActiveReservations
-    Existing *Reservation // reservation already created with this Idempotency-Key, if any
+// domain: pure methods, no I/O, no clock, no ID generation
+type Account struct {
+    ID                 string
+    LimitBytes         int64
+    reservedBytes      int64 // unexported: only Reserve and Release change the counters
+    activeReservations int
 }
+
+// RestoreAccount rebuilds an account from storage.
+func RestoreAccount(id string, limitBytes, reservedBytes int64, activeReservations int) Account
+
+// Reserve answers a reservation request. existing is the reservation already made
+// with the same Idempotency-Key, if any, and is answered first: Replayed, or
+// KeyReusedError. Otherwise candidate is admitted only if a slot and enough space
+// are free, and the counters grow: Created.
+func (a *Account) Reserve(candidate Reservation, existing *Reservation, maxActive MaxActive) (Reservation, Outcome, error)
+
+// Release marks r released and gives its space back. On a reservation already
+// released, it changes nothing and returns false.
+func (a *Account) Release(r *Reservation, at time.Time) bool
+
+func (a Account) AvailableBytes() int64 // max(0, limit − reserved)
+func (a Account) ReservedBytes() int64
+func (a Account) ActiveReservations() int
 
 type MaxActive struct {
     Value int
     Known bool // false until MAX_PARALLEL_CHUNKS has been obtained once
 }
 
-// DecideReserve applies every admission rule, in order (see consistency.md).
-// It returns Create or Replay, or a typed error.
-func DecideReserve(st ReserveState, bytes int64, max MaxActive) (Decision, error)
-
-// service/ports.go
-type ReservationRepository interface {
-    // Reserve loads the state, calls decide and persists the outcome, all in one write transaction.
-    Reserve(ctx context.Context, accountID, key string, candidate domain.Reservation,
-        decide func(domain.ReserveState) (domain.Decision, error)) (domain.Reservation, domain.Decision, error)
-    Release(ctx context.Context, accountID, reservationID string) (domain.Reservation, error)
-    Get(ctx context.Context, accountID, reservationID string) (domain.Reservation, error)
-    Account(ctx context.Context, accountID string) (domain.AccountState, error)
+// service/ports.go: one repository for the aggregate
+type AccountRepository interface {
+    // Reserve loads the account and the reservation already made with the
+    // candidate's key, calls account.Reserve, then inserts the reservation and
+    // saves the counters: one write transaction.
+    Reserve(ctx context.Context, candidate domain.Reservation, maxActive domain.MaxActive) (domain.Reservation, domain.Outcome, error)
+    // Release loads the account and the reservation, calls account.Release and
+    // saves what changed: one write transaction.
+    Release(ctx context.Context, accountID, reservationID string, at time.Time) (domain.Reservation, error)
+    Reservation(ctx context.Context, accountID, reservationID string) (domain.Reservation, error)
+    Account(ctx context.Context, accountID string) (domain.Account, error)
 }
 
 type LimitProvider interface {
@@ -93,7 +112,7 @@ type LimitProvider interface {
 }
 ```
 
-The signatures are indicative and will be settled during implementation. What will not change: no code path reads the state in one statement and writes in another without a transaction around both.
+The signatures are indicative and will be settled during implementation. What will not change: the counters change only through the methods of `Account`, and no code path reads in one statement and writes in another without a transaction around both. Saving the counters as absolute values is safe because `BEGIN IMMEDIATE` holds the write lock from the load to the commit.
 
 ## Request flows
 
@@ -102,20 +121,20 @@ The signatures are indicative and will be settled during implementation. What wi
 1. **handler**: reads `{accountID}`, validates the `Idempotency-Key` header and decodes the body strictly (at most 4 KiB, unknown fields rejected, `bytes` a positive 64-bit integer). Failure gives `400` or `413`.
 2. **service**: takes the in-flight slot for `(accountID, key)`. If it is already taken: `409 request_in_progress`. The slot is released with `defer`.
 3. **service**: reads `MAX_PARALLEL_CHUNKS` from `LimitProvider` (possibly unknown) and builds the candidate reservation (UUIDv7 ID, `created_at` from an injected clock).
-4. **repository**: `BEGIN IMMEDIATE`, then loads the reservation for `(account, key)` and the account row.
-5. **domain**: `DecideReserve` returns `Create`, `Replay` or an error.
-6. **repository**: on `Create`, inserts the reservation, increments the counters and commits. On `Replay`, returns the stored reservation. On error, rolls back.
+4. **repository**: `BEGIN IMMEDIATE`, then loads the account (unknown: `404 account_not_found`) and the reservation already made with the key, if any. Checking the account first never hides a replay: the foreign key guarantees that no reservation exists for an unknown account.
+5. **domain**: `account.Reserve(candidate, existing, maxActive)` returns `Created` or `Replayed`, or a typed error.
+6. **repository**: on `Created`, inserts the reservation, saves the counters and commits. On `Replayed`, returns the stored reservation. On error, rolls back.
 7. **handler**: `201` with `Location`, `200` with `Idempotent-Replayed: true`, or problem details.
 
 ### Release
 
-One write transaction: a conditional `UPDATE … WHERE status = 'active' RETURNING bytes`, then the counters are decremented only if a row changed. Otherwise the reservation is looked up: if it is already released, it is returned unchanged; if it is missing, `404`. SQL in [consistency.md](consistency.md#release-transaction).
+One write transaction: load the reservation (unknown, or owned by another account: `404`) and the account, then `account.Release(&reservation, now)`. It marks the reservation released and gives its space back, or reports that it already was. Only when it changed, the repository writes the reservation and the counters. SQL in [consistency.md](consistency.md#release-transaction).
 
 Release involves neither the in-flight guard nor `LimitProvider`, so it works as long as the database does.
 
 ### Usage
 
-Reads the account row (a single-row read is consistent without an explicit transaction) and the current `MAX_PARALLEL_CHUNKS` (`null` if unknown). `available_bytes = max(0, limit − reserved)`.
+Reads the account (a single-row read is consistent without an explicit transaction) and the current `MAX_PARALLEL_CHUNKS` (`null` if unknown). `available_bytes` is `account.AvailableBytes()`, that is `max(0, limit − reserved)`.
 
 ## Errors across layers
 

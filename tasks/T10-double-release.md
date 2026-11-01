@@ -16,7 +16,7 @@ Case: the same reservation is released twice, by a retry or from two devices, po
 ## Technical acceptance criteria
 
 - [ ] An already released reservation gives `200` with the unchanged body, `released_at` included.
-- [ ] The counters are decremented only by the call that moved the row from `active` to `released`.
+- [ ] `account.Release` on a released reservation changes nothing and returns `false`, so the counters are decremented only by the call that moved the reservation from `active` to `released`.
 - [ ] Concurrent releases and reservations keep invariants I1 and I2, also under the race detector.
 
 ## User acceptance criteria
@@ -27,6 +27,9 @@ The user is a client application. Account `acc_small`.
 - Given 20 releases of the same reservation arrive at the same time, then usage shows 30 MiB less, once.
 
 ## Tests
+
+Unit (`internal/domain`):
+- [ ] `TestAccount_ReleaseTwice` — the second call returns `false` and changes neither the reservation nor the counters.
 
 Integration (`internal/repository/sqlite`, `internal/handler`):
 - [ ] `TestRelease_Twice` — the second call returns the same reservation; the counters changed once.

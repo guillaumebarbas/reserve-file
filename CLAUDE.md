@@ -5,7 +5,7 @@ Take-home exercise for Hivenet: a Go service that reserves storage space for upl
 ## Read before changing behaviour
 
 - `tasks/`: one ticket per step, in order, each with its acceptance criteria and the names of its tests. Ticket TNN is GitHub issue #NN; its state is the issue's `status:` label.
-- `docs/decisions.md`: decisions D1–D19 and their reasons. Do not contradict an Accepted decision without asking the user.
+- `docs/decisions.md`: decisions D1–D20 and their reasons. Do not contradict an Accepted decision without asking the user.
 - `docs/consistency.md`: invariants, reserve and release transactions, failure handling.
 - `docs/api.md`: the HTTP contract and the error catalogue.
 - `docs/architecture.md`: packages and the dependency rule.
@@ -73,7 +73,7 @@ For every ticket, in addition:
 
 - Each reserve or release is one `BEGIN IMMEDIATE` transaction, with no network I/O inside.
 - The idempotency lookup runs before every other admission check.
-- Account counters change only together with the reservation row, in the same transaction.
+- Account counters change only through the methods of the `Account` aggregate, and are saved with the reservation row in the same transaction.
 - `MAX_PARALLEL_CHUNKS` is never fetched on the request path.
 - No SQLite error leaves `internal/repository/sqlite`; no internal error text reaches an HTTP response.
 - The env.hivenet.com payload contains tokens: never log it.

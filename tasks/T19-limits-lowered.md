@@ -19,7 +19,7 @@ Nothing is revoked: existing reservations stay active, and new ones are refused 
 
 ## Technical acceptance criteria
 
-- [ ] `DecideReserve` refuses when `limit − reserved` is negative, without overflow.
+- [ ] `account.Reserve` refuses when `limit − reserved` is negative, without overflow.
 - [ ] `available_bytes` never goes below 0; `reserved_bytes` and `active_reservations` may exceed their limits.
 - [ ] Release works in this state and brings usage back down.
 
@@ -33,7 +33,7 @@ The user is a client application. Account `acc_small`.
 ## Tests
 
 Unit (`internal/domain`):
-- [ ] `TestDecideReserve` — adds: usage above a lowered limit; active reservations above a lowered maximum.
+- [ ] `TestAccount_Reserve` — adds: usage above a lowered limit; active reservations above a lowered maximum.
 
 Integration (`internal/repository/sqlite`, `internal/handler`):
 - [ ] `TestReserve_AfterStorageLimitLowered`

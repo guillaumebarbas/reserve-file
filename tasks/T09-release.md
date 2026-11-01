@@ -15,7 +15,7 @@
 
 ## Technical acceptance criteria
 
-- [ ] One transaction: a conditional `UPDATE … WHERE status = 'active' RETURNING bytes`, then the counters are decremented only if a row changed.
+- [ ] One transaction: load the reservation and the account, call `account.Release`, then save the reservation (`UPDATE … WHERE status = 'active'`, exactly one row) and the counters.
 - [ ] `200` with the reservation, now `released`, with its `released_at`.
 - [ ] `GET` returns the reservation as stored.
 - [ ] Release does not call `LimitProvider`: it depends only on the database.
@@ -30,7 +30,8 @@ The user is a client application. Account `acc_small`.
 
 ## Tests
 
-Unit (`internal/service`):
+Unit (`internal/domain`, `internal/service`):
+- [ ] `TestAccount_Release` — an active reservation is marked released at the given time, and its bytes and its slot come back.
 - [ ] `TestService_ReleaseDoesNotUseLimit` — a fake limit provider fails the test if it is called.
 
 Integration (`internal/repository/sqlite`, `internal/handler`):

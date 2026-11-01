@@ -18,7 +18,7 @@ Cases:
 
 ## Technical acceptance criteria
 
-- [ ] `DecideReserve` looks for a reservation with the same key first, before every other check (step 1).
+- [ ] `account.Reserve` answers a reservation already made with the same key first, before every admission rule (step 2). The repository loads that reservation by its key.
 - [ ] Same key and same `bytes`: the stored reservation is returned in its current state, with `200` and `Idempotent-Replayed: true`. Counters are unchanged.
 - [ ] A refused or failed attempt stores nothing, so the same key can succeed later.
 
@@ -34,7 +34,7 @@ The user is a client application. Account `acc_small`.
 ## Tests
 
 Unit (`internal/domain`):
-- [ ] `TestDecideReserve` — adds: an existing key with the same bytes gives `Replay`.
+- [ ] `TestAccount_Reserve` — adds: an existing key with the same bytes gives `Replay`.
 
 Integration (`internal/repository/sqlite`, `internal/handler`):
 - [ ] `TestReserve_RetryReturnsSameReservation`

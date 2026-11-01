@@ -24,7 +24,7 @@ The package table, the dependency rule and "where code goes" are in `.claude/rul
 ## Where does this code go?
 
 Ask in this order; the first yes wins.
-1. A business rule or a calculation on reservations, without I/O? → `domain`, as a pure function with a table test.
+1. A business rule, without I/O? → `domain`, as a method of the type that owns the data (mostly the `Account` aggregate), with a table test.
 2. The coordination of a use case (in-flight guard, clock, IDs, calls to the repository and the limit provider)? → `service`.
 3. SQL? → `repository/sqlite`. The call to env.hivenet.com? → `limits`. Our HTTP API? → `handler`.
 4. Configuration, construction of components, process lifecycle? → `app`.
@@ -33,7 +33,7 @@ Ask in this order; the first yes wins.
 ## Adding a feature across layers
 
 From the inside out, one TDD cycle at a time, skipping the steps the feature does not need:
-1. `domain`: the rule as a pure function, and its error types.
+1. `domain`: the rule as a method of the aggregate, and its error types.
 2. `service`: the use case, tested against fakes of its ports.
 3. The adapter: repository or client, tested against the real dependency (SQLite file, `httptest` server).
 4. `handler`: the endpoint, its DTOs and its error mapping.
@@ -41,7 +41,8 @@ From the inside out, one TDD cycle at a time, skipping the steps the feature doe
 
 ## Boundaries
 
-- A rule that depends on stored state runs inside the repository transaction, through a decide function from `domain` (update-func pattern). The service never holds a transaction.
+- A rule that depends on stored state runs inside the repository transaction: the repository loads the `Account` aggregate, calls its method and saves the result. The service never holds a transaction.
+- The aggregate's state changes only through its methods: its protected fields are unexported, and adapters rebuild it with `Restore…`.
 - Each adapter translates its dependency's errors into domain errors: no `database/sql`, `net/http` or driver type crosses a boundary inward.
 - Domain types carry no `json` or `db` tags; handlers have their own DTOs, and repositories scan into local variables.
 - `context.Context` crosses every boundary that does I/O; nothing else from the outer layers does.
@@ -56,7 +57,7 @@ go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./internal/... | sed 's#gith
 
 Checklist:
 1. Does each package import only what the dependency rule allows: `domain` the standard library only, adapters never each other, `app` alone importing everything?
-2. Is every business rule in `domain`, as a pure function, rather than in a handler, the service or SQL?
+2. Is every business rule in `domain`, as a method of the type that owns the data, rather than in a handler, the service or SQL?
 3. Does every rule that depends on stored state run inside the repository transaction?
 4. Does an HTTP, SQL or driver type appear in a `domain` or `service` signature?
 5. Is every new interface declared by its consumer, and used by a second implementation or a fake?

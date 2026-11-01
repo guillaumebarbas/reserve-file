@@ -15,8 +15,8 @@
 
 ## Technical acceptance criteria
 
-- [ ] `domain.AvailableBytes(limit, reserved)` returns `max(0, limit − reserved)`.
-- [ ] The repository reads the account row in a single statement, without a transaction. An unknown account gives `ErrAccountNotFound`.
+- [ ] `domain.Account` is the aggregate ([D20](../docs/decisions.md#d20--a-rich-account-aggregate-with-private-counters)): unexported counters, `RestoreAccount` to rebuild it from a row, the accessors `ReservedBytes()` and `ActiveReservations()`, and `AvailableBytes()`, which returns `max(0, limit − reserved)`.
+- [ ] The repository reads the account row in a single statement, without a transaction, and returns it as a `domain.Account`. An unknown account gives `ErrAccountNotFound`.
 - [ ] The service adds `max_active_reservations` from `LimitProvider`, `null` when the limit is unknown.
 - [ ] Response fields and names exactly as in api.md.
 - [ ] `404 account_not_found`; a database failure gives `503 service_unavailable`.
@@ -32,7 +32,7 @@ The user is a client application.
 ## Tests
 
 Unit (`internal/domain`, `internal/service`):
-- [ ] `TestAvailableBytes_NeverNegative` — table, including usage above the limit.
+- [ ] `TestAccount_AvailableBytesNeverNegative` — table, including usage above the limit.
 - [ ] `TestService_UsageCombinesAccountAndLimit` — with a known and with an unknown limit.
 
 Integration (`internal/repository/sqlite`, `internal/handler`):
