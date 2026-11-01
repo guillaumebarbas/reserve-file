@@ -17,7 +17,7 @@ What the reviewer reads and runs first. The README answers the four points of th
 
 - [x] `scripts/demo.sh` uses only POSIX shell and curl. It runs in a `curlimages/curl` container through the `demo` Compose service, prints each step with the expected and actual status, and exits non-zero at the first mismatch.
 - [x] The steps are those of testing.md, on `small_account`. The script checks that nothing is reserved before it starts and releases what it created at the end, so it can be run again.
-- [ ] The README covers:
+- [x] The README covers:
   - how to start the stack (`docker compose up --build`);
   - the database setup: automatic schema and seed at startup, data on the `data` volume, reset with `docker compose down -v`;
   - the configuration: each environment variable and its default (`ENV_CONFIG_URL`, `SEED_ACCOUNTS`…), and how to override it with Compose;
@@ -26,10 +26,10 @@ What the reviewer reads and runs first. The README answers the four points of th
   - time spent, what is complete and what is unfinished;
   - how AI was used;
   - links to `docs/` and `tasks/`.
-- [ ] Every command in the README has been run on a fresh clone.
+- [x] Every command in the README has been run on a fresh clone.
 - [x] The base images (`golang`, `gcr.io/distroless/static`) are pinned by digest in the `Dockerfile` and `compose.yaml`, so the reviewer builds exactly what was tested. Raised in the review of #25.
 - [ ] At submission, the repository and the project board are made public: `gh repo edit guillaumebarbas/reserve-file --visibility public --accept-visibility-change-consequences` and `gh project edit 2 --owner guillaumebarbas --visibility PUBLIC`.
-- [ ] The README is updated after every ticket done later.
+- [x] The README is updated after every ticket done later.
 
 ## User acceptance criteria
 
@@ -43,7 +43,7 @@ The user is the reviewer, with only Docker.
 
 - [x] `scripts/demo.sh` exits with 0 on a fresh stack.
 - [x] `scripts/demo.sh` exits with 0 when run a second time.
-- [ ] The README commands are checked by hand on a fresh clone.
+- [x] The README commands are checked by hand on a fresh clone.
 
 ## Test results
 
@@ -71,3 +71,20 @@ The user is the reviewer, with only Docker.
   - a temporary copy without the steps that need T10 and T14 passes to the end: the remaining reservations are released and usage is back to zero.
 - Remaining: rerun the whole demo twice once T10 and T14 are merged, the README pass once T04 to T11 are done, every README command on a fresh clone, and the publication at submission.
 - After T10 and T14 were merged, the integrator ran the whole demo twice in a row on a fresh stack built from `main` merged into this branch: both runs pass all nine steps and exit with 0. Step 5 gives exactly 3 `201` and 17 `409`, step 6 gives `422 idempotency_key_reused`, and step 7 answers `200` twice with the same `released_at` while the space comes back once.
+
+### Part 3: final README pass and fresh clone (2026-11-01)
+
+- README: final status (every ticket done), the endpoints table without its "Available" column, a design section that says how each case stays consistent, the time spent, and the gaps that would block a production release, linked to consistency.md. Through wave 5 the status was updated once, here, rather than in each pull request, so the nine pull requests did not conflict on the same lines.
+- Every command of the README run on a fresh clone of this branch, on Windows with Docker Desktop, after `echo API_PORT=18110 > .env` as the README says for reserved ports:
+  - `docker compose up --build`: `healthy`; `/healthz` and `/readyz` answer `200` with `X-Request-Id`, and the readiness body is `{"database":"ok","limits":"ok"}`;
+  - usage, reserve (`201` with `Location`), a too large request (`409 insufficient_storage`), the retry (`200`, `Idempotent-Replayed: true`), the read, the release and a second release (`200` both times), an unknown ID (`404`), usage back to zero; `docker compose logs api` shows one line per request;
+  - `docker compose restart api`: usage unchanged, the retry still replayed;
+  - `docker compose run --rm demo`, twice: both runs pass all nine steps;
+  - `docker compose run --rm test`: race detector, 100.0%;
+  - `docker compose stop`: the log ends with `server stopped`, exit code 0;
+  - `SEED_ACCOUNTS=…,small_account:52428800 docker compose up --build`: `small_account` at 50 MiB;
+  - `CORS_ALLOWED_ORIGIN=… docker compose --profile docs up --build`, with `DOCS_PORT` in `.env`: Swagger UI and `openapi.yaml` answer `200`, and a preflight from that origin gets `204` with the CORS headers;
+  - `docker compose run --rm openapi-lint`: valid;
+  - `go test -tags e2e ./e2e/...`: the eight container tests pass in 60 s;
+  - `docker compose down -v`: everything removed.
+- Remaining: making the repository and the project board public at submission, on the author's go.
