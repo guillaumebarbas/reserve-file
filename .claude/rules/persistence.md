@@ -13,7 +13,7 @@ Reference: `docs/consistency.md` (data model, transactions, SQLite configuration
 - Every write runs in one transaction opened with `BeginTx` (the DSN sets `_txlock=immediate`, so it is `BEGIN IMMEDIATE`). `defer tx.Rollback()` right after opening it; `tx.Commit()` at the end. The deferred Rollback's error is ignored on purpose: after a successful Commit it is always `sql.ErrTxDone`. It is the only error ignored without `_ =`.
 - Scan rows into local variables and build domain values from them: nullable columns go through `sql.NullInt64`, timestamps are converted to UTC `time.Time`. No `db` tags on domain types.
 - Read the state and write it in the same transaction. No network call and no sleep inside a transaction.
-- Use `RETURNING` and affected-row counts to know what a statement did; never re-read to guess.
+- Use affected-row counts to know what a statement did; never re-read to guess.
 - Account counters change only in the transaction that changes the reservation row, and only when that row actually changed state.
 - Always use the context variants: `ExecContext`, `QueryContext`, `QueryRowContext`.
 - `defer rows.Close()` after every `QueryContext`, and check `rows.Err()` after the loop.

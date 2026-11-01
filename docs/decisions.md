@@ -62,7 +62,7 @@ How they are implemented: [architecture.md](architecture.md) · [consistency.md]
 
 **Decision.** About six handwritten statements through `database/sql`. Schema in an embedded `schema.sql`, versioned with `PRAGMA user_version`.
 
-**Why.** Correctness depends on details an ORM hides: `BEGIN IMMEDIATE`, `UPDATE … WHERE status = 'active' RETURNING bytes`, affected-row counts, unique-constraint violations. They should be visible in review.
+**Why.** Correctness depends on details an ORM hides: `BEGIN IMMEDIATE`, a guarded `UPDATE … WHERE status = 'active'` and its affected-row count, unique-constraint violations. They should be visible in review.
 
 **Rejected.**
 - GORM: these statements would be raw SQL anyway, and its default SQLite driver needs cgo.
