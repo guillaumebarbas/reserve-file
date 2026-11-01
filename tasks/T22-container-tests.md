@@ -16,7 +16,7 @@ Black-box tests of the packaged service. They build the image, start it with the
 ## Technical acceptance criteria
 
 - [ ] Tests live in `e2e/`, behind the `e2e` build tag, and use only the standard library. They drive `docker compose` through `os/exec`.
-- [ ] `compose.e2e.yaml` adds an `env-stub` service (nginx serving `e2e/testdata/env.json` with `MAX_PARALLEL_CHUNKS: 5`), points `ENV_CONFIG_URL` at it, and publishes the API on port 18080.
+- [ ] `compose.e2e.yaml` adds an `env-stub` service (nginx serving `e2e/testdata/env.json` with `MAX_PARALLEL_CHUNKS: 5`), points `ENV_CONFIG_URL` at it, and publishes the API on port 18090, outside the ports a developer is likely to use for the main stack.
 - [ ] The Compose project is named `reserve-e2e`, so the developer's stack is untouched. `docker compose down -v` runs at the end, even after a failure.
 - [ ] Tests wait for `/readyz` instead of sleeping for a fixed time.
 - [ ] These tests are not part of the coverage metric.

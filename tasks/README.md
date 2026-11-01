@@ -2,7 +2,7 @@
 
 One ticket per step: the foundations, each feature, and each edge case or small group of cases. Every ticket holds an overview, technical and user acceptance criteria, the names of its tests, and their results once run.
 
-**Tracking.** Ticket TNN is GitHub issue #NN. Its state is the issue's label: `status: to do`, `status: in progress`, `status: validation`, `status: validated` or `status: refused`.
+**Tracking.** Ticket TNN is GitHub issue #NN. Its state is the issue's label (`status: to do`, `status: in progress`, `status: validation`, `status: validated` or `status: refused`), mirrored by its column on the [project board](https://github.com/users/guillaumebarbas/projects/2).
 
 **Workflow.**
 1. `/implement-task <ID>` on the first open ticket: a plan to validate, the ticket branch, then the TDD cycle with a validation after each step. The issue moves to `status: in progress`.

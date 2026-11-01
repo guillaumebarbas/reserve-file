@@ -16,15 +16,17 @@ Create the repository and a service that does almost nothing but goes through th
 ## Technical acceptance criteria
 
 - [x] Git repository and `.gitignore` (coverage profile, SQLite files, `/bin`, local Claude Code settings, the exercise brief): done when the repository was bootstrapped.
+- [ ] `.gitignore` also covers `.env`.
 - [ ] `go.mod` with module path `github.com/guillaumebarbas/reserve-file` and `go 1.27`.
 - [ ] Only the packages needed now are created: `cmd/api`, `internal/app`, `internal/handler`.
 - [ ] `cmd/api/main.go` sets up SIGINT/SIGTERM handling and calls `app.Run`, nothing else. Exit code 1 on error.
 - [ ] `app.Run` reads `HTTP_ADDR` (default `:8080`) and `LOG_LEVEL` (default `info`), logs JSON with `log/slog`, serves HTTP, and on cancellation calls `http.Server.Shutdown` with a 10 s limit.
+- [ ] `http.Server` sets `ReadHeaderTimeout`, `ReadTimeout`, `WriteTimeout` and `IdleTimeout`; `WriteTimeout` is longer than the 5 s SQLite busy timeout, so a `503` sent after a lock wait is not cut off.
 - [ ] `GET /healthz` returns `200` with `{"status":"ok"}`.
 - [ ] An `api healthcheck` subcommand calls `/healthz` and exits with 0 or 1. Compose uses it, since distroless has no curl.
 - [ ] Dockerfile: `golang:1.27` build stage with `CGO_ENABLED=0`; `gcr.io/distroless/static:nonroot` runtime; `/data` owned by `65532:65532`; `ENTRYPOINT` in exec form.
 - [ ] `compose.yaml`:
-  - `api`: build, port 8080, named volume `data` mounted on `/data`, health check;
+  - `api`: build, host port `${API_PORT:-8080}` mapped to 8080, named volume `data` mounted on `/data`, health check. `API_PORT` exists because Windows can reserve port ranges (Hyper-V, WSL); a local `.env` file, ignored by git, overrides it;
   - `test` (profile `test`): `golang:1.27` with the source mounted, running `go vet ./...`, `go test -race -coverpkg=./internal/... -coverprofile=coverage.out ./...` and `scripts/check-coverage.sh coverage.out`.
 - [ ] `scripts/check-coverage.sh` fails unless the total coverage is 100.0%.
 - [ ] `gofmt -l .` prints nothing and `docker compose run --rm test` passes.

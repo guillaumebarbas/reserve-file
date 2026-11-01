@@ -13,11 +13,11 @@ Context from the user: $ARGUMENTS
 
 1. `git branch --show-current`. On `main`, stop: work happens on a ticket branch, which `/implement-task` creates.
 2. `git status --short` and `git diff --stat`. If there is nothing to commit and nothing to push, say so and stop.
-3. Find the ticket from the branch name: `feat/t06-reserve` is T06, issue #6.
+3. Find the ticket from the branch name: `feat/t06-reserve` is T06, issue #6. A branch without a ticket ID (tooling, docs) has no ticket, and its commits have no `Refs` footer.
 
 ## 2. Checks
 
-4. `gofmt -l .` prints nothing; `go vet ./...` and `go test ./...` pass. If a check fails, show its output and stop: nothing is committed while checks fail.
+4. `gofmt -l .` prints nothing; `go vet ./...` and `go test ./...` pass (once `go.mod` exists). If a check fails, show its output and stop: nothing is committed while checks fail.
 
 ## 3. Proposal
 

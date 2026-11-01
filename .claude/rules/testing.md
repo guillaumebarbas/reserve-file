@@ -44,8 +44,9 @@ Process: `/implement-task` and the `tdd` skill. Which tests to write: the curren
 
 ## Concurrency
 
-- Start all goroutines together (close a shared channel), wait with `sync.WaitGroup`, then count every outcome exactly.
-- Never use `time.Sleep` to order events: use channels.
+- Start all goroutines together (close a shared channel), run them with `wg.Go(func() { … })`, then count every outcome exactly after `wg.Wait()`.
+- Never call `t.Fatal`, `t.FailNow` or a helper that does from a goroutine the test started: record results, assert after `wg.Wait()`.
+- Never use `time.Sleep` to order events: use channels. Time-based behaviour (refresh interval, backoff) is tested with `testing/synctest`, whose clock is virtual.
 - These tests must pass under the race detector: `docker compose run --rm test`.
 
 ## External HTTP

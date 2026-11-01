@@ -47,7 +47,7 @@ Ask the user to validate the plan and wait. Revise it until they approve it. If 
 1. The working tree must be clean; otherwise show `git status` and ask what to do.
 2. `git switch main` and `git pull --ff-only`.
 3. Branch: if the ticket's branch already exists (rework after a refusal), switch to it and pull. Otherwise create it from `main` with `git switch -c <branch>`. The pull request will link it to the issue through `Closes #<issue>`.
-4. On the issue: replace its `status:` label with `status: in progress`, and assign it to the user.
+4. Set the ticket state to `in progress` (see Ticket state in `CLAUDE.md`), and assign the issue to the user.
 
 ## 4. Implement, one validated step at a time
 

@@ -25,7 +25,7 @@ The reader is new to Go: choose the most obvious construct, not the shortest or 
 - One job per function. Split it when it mixes several steps or grows past about 40 lines.
 - Return early on errors so the main path stays unindented. No `else` after a `return`.
 - `context.Context` is the first parameter of every function that does I/O. Never store it in a struct.
-- More than four parameters: pass a struct.
+- More than four parameters besides `ctx`: pass a struct. `ctx` never goes inside a struct.
 - No named results, no bare `return`.
 - No boolean parameter that switches behaviour: write two functions.
 

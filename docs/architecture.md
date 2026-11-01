@@ -122,17 +122,17 @@ Reads the account row (a single-row read is consistent without an explicit trans
 | Layer | Responsibility |
 |---|---|
 | `domain` | Defines the errors. Business refusals carry their facts: `InsufficientStorageError{Requested, Available, Limit}`, `TooManyActiveError{Active, Max}`, `KeyReusedError{OriginalBytes}`. Sentinels: `ErrAccountNotFound`, `ErrReservationNotFound`, `ErrRequestInProgress`, `ErrLimitUnavailable`, `ErrUnavailable`. |
-| `repository/sqlite` | Translates driver errors. No rows becomes a not-found sentinel; busy, locked, I/O error or closed database becomes `ErrUnavailable`, wrapping the cause with `%w` for the logs. No SQLite error leaves this package. |
+| `repository/sqlite` | Translates driver errors. No rows becomes a not-found sentinel; busy, locked, I/O error or closed database becomes `ErrUnavailable`: `fmt.Errorf("%w: begin reserve: %v", domain.ErrUnavailable, err)`. The sentinel is wrapped with `%w`; the driver cause only with `%v`, so its text reaches the logs but `errors.As` cannot reach the SQLite error. No SQLite error leaves this package. |
 | `handler` | Maps errors to status, `code` and `detail` with `errors.Is` / `errors.As` (catalogue in [api.md](api.md#errors)). Anything unrecognized becomes `500 internal_error`, logged with its `request_id`. |
 
 ## External limit component
 
 The `limits` package:
-- **Start**: loads the persisted value, attempts one fetch (bounded by the 3 s timeout), then starts the refresher goroutine.
+- **`Init(ctx)`**: loads the persisted value, then attempts one fetch (bounded by the 3 s timeout). Synchronous.
 - **`MaxActive()`**: an atomic read. It never blocks and never does I/O.
-- **Refresher**: runs every 60 s. On failure it keeps the current value and logs a warning. While no value is known, it retries with backoff from 1 s up to 30 s.
+- **`Run(ctx)`**: blocks and refreshes every 60 s until `ctx` is cancelled. On failure it keeps the current value and logs a warning. While no value is known, it retries with backoff from 1 s up to 30 s. `app` starts it in a goroutine it owns, on the application context (never a request's), and waits for it at shutdown. The package itself starts no goroutine.
 - **Validation**: status 200, body at most 1 MiB, a JSON object, `MAX_PARALLEL_CHUNKS` an integer ≥ 1. The body is never logged, because it contains analytics tokens.
-- **Stop**: when its context is cancelled at shutdown.
+- **HTTP client**: its own `http.Client` with a timeout, never `http.Get` or `http.DefaultClient`; the response body is always closed.
 
 ## Process lifecycle
 
@@ -164,8 +164,8 @@ The `limits` package:
 - **Signals**: `ENTRYPOINT ["/app/api"]` in exec form, so the process is PID 1 and receives SIGTERM directly.
 - **Health check**: distroless has no curl, so the binary's `healthcheck` subcommand calls `/healthz`.
 - **Compose**:
-  - `api`: port 8080, named volume `data`;
-  - `test`: `golang:1.27` with the source mounted, running `go vet ./... && go test -race ./...`;
+  - `api`: host port `${API_PORT:-8080}` (Windows can reserve port ranges, so a local `.env` may override it), named volume `data`;
+  - `test`: `golang:1.27` with the source mounted, running `go vet ./...`, `go test -race` with a coverage profile, then `scripts/check-coverage.sh`, which fails below 100%;
   - `demo`: a curl image running `scripts/demo.sh` against `api`.
 
   `test` and `demo` sit behind profiles and only run when invoked.
@@ -174,7 +174,7 @@ The `limits` package:
 
 - Small interfaces, declared by the package that uses them.
 - No `Interface` / `Impl` pairs; no `utils`, `models` or `common` packages.
-- Wiring by hand in `main.go`; no dependency-injection framework.
-- Errors are values: wrapped with `%w`, inspected with `errors.Is` / `errors.As`. No panics for control flow.
+- Wiring by hand in `internal/app`; no dependency-injection framework.
+- Errors are values: wrapped with `%w` inside the module, inspected with `errors.Is` / `errors.As`. At the boundary with a dependency, the dependency's error is formatted with `%v`. No panics for control flow.
 - `context.Context` is the first parameter of every call that does I/O.
 - `gofmt`, `go vet` and `golangci-lint` report nothing.
