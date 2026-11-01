@@ -40,16 +40,18 @@ docker compose down -v
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `DB_PATH` | `/data/reserve.db` | SQLite file |
 | `SEED_ACCOUNTS` | `large_account:10737418240,small_account:104857600` | Accounts applied at startup, as `id:limit_bytes` (10 GiB and 100 MiB) |
+| `ENV_CONFIG_URL` | `https://env.hivenet.com/dev` | Source of `MAX_PARALLEL_CHUNKS`, an absolute http or https URL |
+| `ENV_CONFIG_REFRESH` | `60s` | How often the limit is fetched again |
+| `ENV_CONFIG_TIMEOUT` | `3s` | Timeout of one fetch |
 
-Compose passes `SEED_ACCOUNTS` from your shell or `.env`. For example, to lower `small_account` to 50 MiB at the next start:
+Compose passes `SEED_ACCOUNTS` and `ENV_CONFIG_URL` from your shell or `.env`. For example, to lower `small_account` to 50 MiB at the next start, or to read the limit from another environment:
 
 ```sh
 SEED_ACCOUNTS=large_account:10737418240,small_account:52428800 docker compose up --build
+ENV_CONFIG_URL=https://env.example.com/staging docker compose up --build
 ```
 
 Any other variable goes under `services.api.environment` in a `compose.override.yaml`, which Compose merges automatically. An invalid value stops the startup with an error that names the variable.
-
-The settings of the limit source (`ENV_CONFIG_URL`, `ENV_CONFIG_REFRESH`, `ENV_CONFIG_TIMEOUT`) come with [T04](tasks/T04-external-limit.md).
 
 ## Try it
 
@@ -63,7 +65,7 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 X-Request-Id: b749a20a74cad954
 
-{"database":"ok"}
+{"database":"ok","limits":"ok"}
 ```
 
 Every response carries an `X-Request-Id`; `docker compose logs api` shows one line per request with the same ID. Errors are `application/problem+json` with a stable `code`.
@@ -75,7 +77,7 @@ Every response carries an `X-Request-Id`; `docker compose logs api` shows one li
 | `GET` | `/accounts/{accountID}/reservations/{reservationID}` | Read a reservation | With T09 |
 | `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation | With T09 |
 | `GET` | `/healthz` | Liveness | Yes |
-| `GET` | `/readyz` | Readiness: the database answers | Yes |
+| `GET` | `/readyz` | Readiness: the database answers; `limits` tells whether `MAX_PARALLEL_CHUNKS` is known | Yes |
 
 The contract, the error catalogue and the retry rules are in [docs/api.md](docs/api.md).
 
@@ -103,8 +105,8 @@ The reasons, the invariants and the failure handling are in [docs/decisions.md](
 
 Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2).
 
-- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03).
-- **In progress:** limit source (T04), usage (T05), this README and the demo (T12).
+- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04).
+- **In progress:** usage (T05), this README and the demo (T12).
 - **Not started:** reserve, release, retries and concurrency (T06 to T11), the other edge cases (T13 to T21), container tests (T22), OpenAPI (T23).
 
 Time spent so far: T01 35 min, T02 30 min, T03 30 min, after the design and tooling work (docs, tickets, rules, GitHub setup).
