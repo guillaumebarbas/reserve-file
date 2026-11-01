@@ -301,7 +301,7 @@ In memory, the aggregate is the account row and, when needed, the one reservatio
 
 **Status:** Accepted
 
-**Decision.** `GET /accounts/{accountID}/reservations` answers `{"reservations": [...]}` with the account's active reservations, oldest first (`created_at`, then `id`), each with the body of a single read, and `[]` when none is active. The service checks the account first, so an unknown account gets `404 account_not_found`; the repository then lists in one `SELECT`. Nothing is written, so neither read runs in a transaction: accounts are never deleted, and one statement is consistent on its own.
+**Decision.** `GET /accounts/{accountID}/reservations` answers `{"reservations": [...]}` with the account's active reservations, oldest first (`created_at`, then `id`), each with the body of a single read, and `[]` when none is active. The service checks the account first, so an unknown account gets `404 account_not_found`; the repository then lists in one `SELECT`. Nothing is written, so neither read runs in a transaction: accounts are never deleted, and one statement is consistent on its own. The list is all or nothing: SQLite sorts every matching row before it returns the first one, so an error on any row fails the query itself.
 
 **Why.** Reservations do not expire ([G1](consistency.md#gaps-that-would-block-a-production-release)). A client that lost its reservation IDs, or an operator, needs to find the reservations that hold space and slots in order to release them. An account has at most `MAX_PARALLEL_CHUNKS` active reservations, a few more only after the limit was lowered, so one response holds them all. The brief does not ask for this endpoint: it was added at the end, as an extra.
 

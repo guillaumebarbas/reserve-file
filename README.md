@@ -290,7 +290,7 @@ Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project 
 - Before the first ticket, the design and the tooling: docs, decisions, tickets, project rules, GitHub setup.
 - T01 to T03, one ticket at a time: about 1 h 35 min.
 - T04 to T23, built in parallel by agents and reviewed one at a time: about 1 h 45 min of wall-clock time.
-- T53, the list of active reservations, added at the end: about 15 min.
+- T53, the list of active reservations, added at the end: about 25 min, review included.
 
 ### Gaps that would block a production release
 

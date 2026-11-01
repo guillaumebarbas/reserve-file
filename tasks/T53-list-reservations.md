@@ -44,13 +44,15 @@ Integration (`internal/repository/sqlite`, `internal/handler`):
 - [x] `TestAPI_ListActiveReservations` — `200` with the active reservations, oldest first, each with the body of a single read.
 - [x] `TestAPI_ListActiveReservationsEmpty` — `200` with `{"reservations":[]}`.
 - [x] `TestAPI_ListActiveReservationsUnknownAccount` — `404 account_not_found`.
+- [x] `TestListActiveReservations_ErrorOnTheSecondRowFailsTheWholeList` *(added in the review)* — an error raised by one row fails the whole query: `ErrServiceUnavailable`, never the rows before it.
+- [x] `TestAPI_DatabaseClosedReturns503` *(case `list_active_reservations` added in the review)* — `503 service_unavailable` with `Retry-After` and the log line, as for the other endpoints.
 
 ## Test results
 
 Run on 2026-11-01.
 
 - `gofmt -l .` prints nothing; `go vet ./...` passes; no comment in the Go code.
-- `go test ./...` (also with `-shuffle=on`): 167 tests and 199 subtests pass, none fail or skip; the seven tests of this ticket are new.
+- `go test ./...` (also with `-shuffle=on`): 168 tests and 200 subtests pass, none fail or skip; the eight tests of this ticket are new, and `TestAPI_DatabaseClosedReturns503` has one more case.
 - `docker compose run --rm test`: passes with the race detector; coverage of `./internal/...` is 100.0%.
 - `docker compose run --rm openapi-lint`: valid.
 - Failed first on an assertion: `TestService_ListActiveReservationsChecksTheAccount` and `TestListActiveReservations_OnlyActiveOldestFirst` (the stubs returned nothing), `TestAPI_ListActiveReservations` (`405`: the path only accepted `POST`), `TestAPI_ListActiveReservationsEmpty` (`{"reservations":null}`: a nil slice encodes as `null`).
@@ -58,3 +60,7 @@ Run on 2026-11-01.
 - `TestListActiveReservations_OnlyActiveOldestFirst` fails under each mutation of the query: without `ORDER BY`, with `ORDER BY id`, without the status filter, without the account filter.
 - `EXPLAIN QUERY PLAN` of the list: `SEARCH reservations USING INDEX sqlite_autoindex_reservations_2 (account_id=?)`, then `USE TEMP B-TREE FOR ORDER BY`.
 - Container, checked by hand on the local Compose stack: `[]` on an empty `small_account`; two reservations listed oldest first; after releasing the first, only the second; `404 account_not_found` for an unknown account; both released at the end. Swagger UI serves the new operation.
+- Review of #56, three findings:
+  - The `503` of the list was proved only by composition: `TestAPI_DatabaseClosedReturns503` gained the `list_active_reservations` case, which fails if the handler ignores the service's error.
+  - The `any` of `rowScanner` is kept with the author's agreement, recorded as an exception in `.claude/rules/go-style.md`: it repeats `database/sql`'s `Scan` and avoids a second copy of the column mapping.
+  - The explicit `rows.Err()` check suggested by the review was not added. With `ORDER BY`, SQLite sorts every matching row in the first step, which the driver runs inside `QueryContext`, so an error raised by the second row surfaces there: `TestListActiveReservations_ErrorOnTheSecondRowFailsTheWholeList` fails when that branch returns the driver error untranslated, and still passes when the `rows.Err()` line returns `nil`. No test could reach an explicit branch, and the list is all or nothing.
