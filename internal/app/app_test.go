@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ import (
 const deadlineIfRunHangs = 5 * time.Second
 
 func TestRun_ServesUntilContextCancelled(t *testing.T) {
-	addr, stop, result := startRun(t, map[string]string{"HTTP_ADDR": "127.0.0.1:0"})
+	addr, stop, result := startRun(t, map[string]string{"HTTP_ADDR": "127.0.0.1:0", "DB_PATH": newDatabasePath(t)})
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	response, err := client.Get("http://" + addr + "/healthz")
@@ -47,7 +48,7 @@ func TestRun_FailsWhenAddressInUse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), deadlineIfRunHangs)
 	defer cancel()
 
-	err = Run(ctx, nil, fakeGetenv(map[string]string{"HTTP_ADDR": addr}), io.Discard)
+	err = Run(ctx, nil, fakeGetenv(map[string]string{"HTTP_ADDR": addr, "DB_PATH": newDatabasePath(t)}), io.Discard)
 
 	if err == nil {
 		t.Fatalf("Run on %s, already in use: got nil error, want an error", addr)
@@ -69,6 +70,22 @@ func TestRun_FailsOnInvalidConfiguration(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "LOG_LEVEL") {
 		t.Errorf("Run with %v: error %q does not name LOG_LEVEL", environment, err)
+	}
+}
+
+func TestRun_FailsWhenDatabaseCannotOpen(t *testing.T) {
+	directory := t.TempDir()
+	environment := map[string]string{"HTTP_ADDR": "127.0.0.1:0", "DB_PATH": directory}
+	ctx, cancel := context.WithTimeout(context.Background(), deadlineIfRunHangs)
+	defer cancel()
+
+	err := Run(ctx, nil, fakeGetenv(environment), io.Discard)
+
+	if err == nil {
+		t.Fatalf("Run with DB_PATH=%s, a directory: got nil error, want an error", directory)
+	}
+	if !strings.Contains(err.Error(), "open database") {
+		t.Errorf("Run with DB_PATH=%s, a directory: error %q does not name the database", directory, err)
 	}
 }
 
@@ -121,9 +138,6 @@ func TestHealthcheck_ProbesWhereTheServerListens(t *testing.T) {
 	}
 }
 
-// startRun runs Run in the background and waits for its "server started" log
-// line. It returns the address read from that line, a function that cancels
-// Run's context, and a channel that receives Run's result.
 func startRun(t *testing.T, environment map[string]string) (string, context.CancelFunc, <-chan error) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -146,7 +160,6 @@ func startRun(t *testing.T, environment map[string]string) (string, context.Canc
 			t.Fatalf("log line %q is not JSON: %v", logLines.Text(), err)
 		}
 		if record.Msg == "server started" {
-			// Keep reading, so that Run never blocks on its next log lines.
 			go io.Copy(io.Discard, logReader)
 			return record.Addr, cancel, result
 		}
@@ -162,8 +175,6 @@ func runHealthcheck(httpAddr string) error {
 	return Run(ctx, []string{"healthcheck"}, fakeGetenv(environment), io.Discard)
 }
 
-// startServerOn serves the API on host and returns the port it listens on. It
-// skips the test when the machine cannot listen on host.
 func startServerOn(t *testing.T, host string) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
@@ -177,6 +188,11 @@ func startServerOn(t *testing.T, host string) string {
 	t.Cleanup(server.Close)
 	_, port, _ := net.SplitHostPort(listener.Addr().String())
 	return port
+}
+
+func newDatabasePath(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), "reserve.db")
 }
 
 func closedAddress(t *testing.T) string {

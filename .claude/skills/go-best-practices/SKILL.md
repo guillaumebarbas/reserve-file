@@ -59,7 +59,7 @@ The reader is new to Go and must explain the code live. Between two correct opti
 - Enums are typed constants whose zero value is invalid: `iota + 1`, or string constants matching the stored values (`"active"`, `"released"`).
 - File order: types and constants, exported functions in call order, then unexported helpers. Struct literals name their fields.
 - Accept a little repetition rather than an abstraction built to remove it.
-- Doc comments state what is not obvious: whether a type is safe for concurrent use, and who must clean up (cancel, `Close`).
+- No comments, doc comments included: names say what is not obvious, and `docs/` holds the reasons a reviewer needs.
 
 ## Where sources disagree with our rules
 
@@ -70,6 +70,7 @@ The reader is new to Go and must explain the code live. Between two correct opti
 | `var _ Iface = (*T)(nil)` compliance check (Uber) | None in adapters | It would make `repository/sqlite` import `service`; the wiring in `app` already fails to compile |
 | Assertion helpers are not idiomatic (Google) | `assertInvariants(t, db)` with `t.Helper()` | One invariant check reused by every database test; a deliberate project choice |
 | Short names for short-lived variables | Descriptive names except `ctx`, `err`, `tx`, `db`, `w`, `r`, `t`, `i` | The reader is new to Go |
+| A doc comment on every package and exported name (Go Code Review Comments, Google) | No comments in Go code, only toolchain directives (`//go:embed`) | The user's choice: Go requires none; names carry the meaning, and the reasons go to the chat or to `docs/` |
 
 ## Review checklist
 
@@ -87,7 +88,7 @@ The reader is new to Go and must explain the code live. Between two correct opti
 12. Can a Go newcomer follow each function: early returns, no shadowed `ctx` or `err`, no `Get` prefixes, MixedCaps constants, enums with an invalid zero value?
 13. Do tests call `t.Fatal` only from the test goroutine, keep table rows free of behaviour flags, name subtests like identifiers, and print input, got and want?
 14. Does each new branch have a test that reproduces the real failure, and does each concurrency test count every outcome?
-15. Do exported names document the errors they return, and their concurrency safety and cleanup duties when not obvious?
+15. Is the code free of comments other than toolchain directives (`//go:embed`, `//go:build`)?
 
 ## Sources
 

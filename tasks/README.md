@@ -13,7 +13,7 @@ One ticket per step: the foundations, each feature, and each edge case or small 
 | ID | Ticket | Kind | Priority | Estimate | Depends on | Issue | Branch | Actual |
 |---|---|---|---|---|---|---|---|---|
 | [T01](T01-scaffold.md) | Scaffold and walking skeleton | Foundation | P0 | 30 min | — | [#1](https://github.com/guillaumebarbas/reserve-file/issues/1) | `chore/t01-scaffold` | 35 min |
-| [T02](T02-database.md) | Database | Foundation | P0 | 25 min | T01 | [#2](https://github.com/guillaumebarbas/reserve-file/issues/2) | `feat/t02-database` | |
+| [T02](T02-database.md) | Database | Foundation | P0 | 25 min | T01 | [#2](https://github.com/guillaumebarbas/reserve-file/issues/2) | `feat/t02-database` | 30 min |
 | [T03](T03-http-foundation.md) | HTTP foundation and error format | Foundation | P0 | 30 min | T01 | [#3](https://github.com/guillaumebarbas/reserve-file/issues/3) | `feat/t03-http-foundation` | |
 | [T04](T04-external-limit.md) | External limit: fetch, cache and refresh | Foundation | P0 | 25 min | T02, T03 | [#4](https://github.com/guillaumebarbas/reserve-file/issues/4) | `feat/t04-external-limit` | |
 | [T05](T05-usage.md) | Account usage | Feature | P0 | 15 min | T04 | [#5](https://github.com/guillaumebarbas/reserve-file/issues/5) | `feat/t05-usage` | |

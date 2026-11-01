@@ -157,7 +157,9 @@ The `limits` package:
 
 **Startup (`app.Run`):** read the configuration, open the database (pragmas, migration, account seeding), start `limits`, start the HTTP server.
 
-**Shutdown (SIGINT or SIGTERM):** stop accepting connections and let in-flight requests finish (`http.Server.Shutdown`, 10 s), stop the refresher, close the database.
+**Shutdown (SIGINT or SIGTERM):** stop accepting connections and let in-flight requests finish (`http.Server.Shutdown`, 10 s), stop the refresher, close the database. If the server stops on its own, the same shutdown runs, as after a signal.
+
+**HTTP server timeouts:** read header 5 s, read 10 s, write 15 s, idle 60 s. The write timeout is longer than SQLite's 5 s busy timeout, so a `503` sent after a lock wait still reaches the client.
 
 **Middleware:**
 - request ID, generated per request, returned in `X-Request-Id` and attached to every log line;
@@ -181,9 +183,9 @@ The `limits` package:
 - **Dockerfile**: stage 1 is `golang:1.27` running `CGO_ENABLED=0 go build -trimpath`; stage 2 is `gcr.io/distroless/static:nonroot` (no shell, runs as UID 65532).
 - **Volume ownership**: `/data` is created in the image and owned by `65532:65532`. Docker copies that ownership into an empty named volume on first mount; without it, the non-root process cannot write the database.
 - **Signals**: `ENTRYPOINT ["/app/api"]` in exec form, so the process is PID 1 and receives SIGTERM directly. Compose waits 15 s (`stop_grace_period`) before killing it, longer than the 10 s shutdown timeout.
-- **Health check**: distroless has no curl, so the binary's `healthcheck` subcommand calls `/healthz`.
+- **Health check**: distroless has no curl, so the binary's `healthcheck` subcommand calls `/healthz`. When `HTTP_ADDR` listens on every interface, it calls `127.0.0.1`: Docker runs the check inside the container, next to the server.
 - **Compose**:
-  - `api`: host port `${API_PORT:-8080}` (Windows can reserve port ranges, so a local `.env` may override it), named volume `data`;
+  - `api`: host port `${API_PORT:-8080}` (Windows can reserve port ranges, so a local `.env` may override it), named volume `data`, and `SEED_ACCOUNTS` passed through from the shell or `.env` (left empty, the service seeds its default accounts);
   - `test`: `golang:1.27` with the source mounted, running `go vet ./...`, `go test -race` with a coverage profile, then `scripts/check-coverage.sh`, which fails below 100%;
   - `demo`: a curl image running `scripts/demo.sh` against `api`.
 

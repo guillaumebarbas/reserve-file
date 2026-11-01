@@ -1,4 +1,3 @@
-// Command api runs the storage reservation service.
 package main
 
 import (
