@@ -8,19 +8,16 @@ import (
 	"github.com/guillaumebarbas/reserve-file/internal/domain"
 )
 
-type rowQuerier interface {
-	QueryRowContext(ctx context.Context, query string, arguments ...any) *sql.Row
-}
+const selectAccount = `SELECT storage_limit_bytes, reserved_bytes, active_reservations FROM accounts WHERE id = ?`
 
 func (store *Store) Account(ctx context.Context, accountID string) (domain.Account, error) {
-	return readAccount(ctx, store.database, accountID)
+	return scanAccount(accountID, store.database.QueryRowContext(ctx, selectAccount, accountID))
 }
 
-func readAccount(ctx context.Context, querier rowQuerier, accountID string) (domain.Account, error) {
-	const selectAccount = `SELECT storage_limit_bytes, reserved_bytes, active_reservations FROM accounts WHERE id = ?`
+func scanAccount(accountID string, row *sql.Row) (domain.Account, error) {
 	var limitBytes, reservedBytes int64
 	var activeReservations int
-	err := querier.QueryRowContext(ctx, selectAccount, accountID).Scan(&limitBytes, &reservedBytes, &activeReservations)
+	err := row.Scan(&limitBytes, &reservedBytes, &activeReservations)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Account{}, domain.ErrAccountNotFound
 	}

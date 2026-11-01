@@ -14,7 +14,7 @@ func (store *Store) Reserve(ctx context.Context, candidate domain.Reservation, m
 		return translateDriverError("begin reserve", err)
 	}
 	defer transaction.Rollback()
-	account, err := readAccount(ctx, transaction, candidate.AccountID)
+	account, err := scanAccount(candidate.AccountID, transaction.QueryRowContext(ctx, selectAccount, candidate.AccountID))
 	if err != nil {
 		return err
 	}
