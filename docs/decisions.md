@@ -183,7 +183,7 @@ How they are implemented: [architecture.md](architecture.md) · [consistency.md]
 
 **Decision.** `MAX_PARALLEL_CHUNKS` is never fetched on the request path.
 - At startup, the last valid value is loaded from the database, then `https://env.hivenet.com/dev` is fetched (3 s timeout, 1 MiB body cap).
-- The value is refreshed every 60 s; failures are retried with capped exponential backoff.
+- The value is refreshed every 60 s. While no value has ever been obtained, a failed fetch is retried sooner, with a backoff from 1 s doubling up to 30 s; once a value is known, a failure keeps it and the next fetch comes after the normal 60 s.
 - A value is accepted only if it is a JSON integer ≥ 1. Anything else keeps the previous value and logs a warning.
 - Each new value is persisted.
 

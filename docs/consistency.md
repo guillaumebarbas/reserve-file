@@ -197,16 +197,16 @@ The value is never fetched on the request path ([D12](decisions.md#d12--external
 
 | Situation | Behaviour |
 |---|---|
-| Down, `5xx` or slower than 3 s, after a value was obtained | The last valid value is kept (memory and database), a warning is logged, and the fetch is retried with backoff |
-| The service restarts during the outage | The last valid value is reloaded from `settings` |
-| First start during an outage, nothing stored | New reservations get `503 limit_unavailable` with `Retry-After`; release, usage, `GET` and replays are unaffected ([D13](decisions.md#d13--fail-closed-until-the-limit-is-known)) |
+| Down, `5xx` or slower than 3 s, after a value was obtained | The last valid value is kept (memory and database), a warning is logged without the payload, and the next fetch comes after the normal 60 s: a valid value is in use, so there is no hurry |
+| The service restarts during the outage | The last valid value is reloaded from `settings`. A save that failed is retried at the next refresh, so the stored value does not lag behind |
+| First start during an outage, nothing stored | New reservations get `503 limit_unavailable` with `Retry-After`; release, usage, `GET` and replays are unaffected ([D13](decisions.md#d13--fail-closed-until-the-limit-is-known)). The fetch is retried after 1 s, then 2, 4, 8, 16 and every 30 s, until a value is obtained; from then on the normal 60 s applies |
 | Key missing, `"5"`, `5.5`, `0`, a negative number, invalid JSON, body over 1 MiB | The value is rejected and the previous one kept |
 | The value increases | It applies from the next refresh (within 60 s) |
 | The value decreases | See P7 |
 
 The payload contains analytics tokens and is never logged.
 
-**Proved by.** `TestFetcher_RejectsInvalidResponses`, `TestLimits_KeepsLastValidValueOnFailure`, `TestLimits_ReloadsPersistedValue`, `TestLimits_UnknownUntilFirstSuccess`, `TestAPI_ReserveWhenLimitUnknown`.
+**Proved by.** `TestFetcher_RejectsInvalidResponses`, `TestLimits_KeepsLastValidValueOnFailure`, `TestLimits_KeepsLastValidValueWhenSourceTimesOut`, `TestLimits_NeverLogsBody`, `TestLimits_ReloadsPersistedValue`, `TestLimits_RetriesSaveAfterFailure`, `TestLimits_RetriesWithBackoffWhileUnknown`, `TestLimits_UnknownUntilFirstSuccess`, `TestAPI_ReserveWhenLimitUnknown`.
 
 ### P9 — The database is unavailable
 
