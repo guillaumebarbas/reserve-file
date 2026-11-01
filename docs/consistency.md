@@ -239,13 +239,14 @@ The request context is cancelled. The transaction either commits or rolls back; 
 
 ### P12 — Restart and shutdown
 
-Everything needed for correctness is in the database.
+Everything needed for correctness is in the database: the accounts and their counters, the reservations with their idempotency keys and states, and the last valid limit.
+- After a restart, usage is the same, a retry with a known key is replayed, and a reservation released before the restart is replayed as released.
 - The in-flight guard starts empty after a restart, which is correct since no request survives one.
 - The limit is reloaded from `settings`.
 
-On SIGTERM, the server stops accepting connections, finishes in-flight requests (up to 10 s), stops the refresher and closes the database.
+On SIGTERM, the application context is cancelled. The HTTP server stops accepting connections and lets in-flight requests finish (up to 10 s), while the limits refresher, which runs on the same context, stops. `app` waits for both, then closes the database last, so an in-flight request still reads and writes an open database. If the server stops on its own, `app` stops the refresher once the server has stopped, and the database is still closed last.
 
-**Proved by.** `TestRepository_ReopenKeepsState`, `TestRun_DrainsInFlightRequestsOnShutdown`, `TestContainer_RestartKeepsReservations`, `TestContainer_SigtermStopsGracefully`.
+**Proved by.** `TestRepository_ReopenKeepsState`, `TestRun_DrainsInFlightRequestsOnShutdown`, `TestLimits_ReloadsPersistedValue`, `TestContainer_RestartKeepsReservations`, `TestContainer_SigtermStopsGracefully`.
 
 ### P13 — Invalid input
 
