@@ -164,9 +164,9 @@ The guard is a convenience. The `UNIQUE (account_id, idempotency_key)` constrain
 
 **Problem.** A client bug sends a known key with another size. Returning the stored reservation would silently hand back the wrong amount of space.
 
-**Solution.** `bytes` is stored with the key. A mismatch returns `422 idempotency_key_reused`, with the original `bytes` in the response.
+**Solution.** `bytes` is stored with the key. `account.Reserve` compares it right after the key lookup, before every admission rule, so the answer never depends on the account's state. A mismatch returns `422 idempotency_key_reused`, with the original `bytes` in the response, and writes nothing.
 
-**Proved by.** `TestAccount_Reserve`, `TestAPI_KeyReuseWithDifferentBytes`.
+**Proved by.** `TestAccount_Reserve`, `TestReserve_KeyReuseWithDifferentBytes`, `TestAPI_KeyReuseWithDifferentBytes`.
 
 ### P5 — A retry arrives after the situation changed
 

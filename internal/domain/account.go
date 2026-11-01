@@ -30,6 +30,9 @@ func (account Account) ActiveReservations() int {
 
 func (account *Account) Reserve(candidate Reservation, existing *Reservation, maxActive MaxActive) (Reservation, Outcome, error) {
 	if existing != nil {
+		if existing.Bytes != candidate.Bytes {
+			return Reservation{}, 0, IdempotencyKeyReusedError{OriginalBytes: existing.Bytes}
+		}
 		return *existing, Replayed, nil
 	}
 	if candidate.Bytes <= 0 {
