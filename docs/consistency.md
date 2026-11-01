@@ -26,11 +26,11 @@ These hold after every committed transaction.
 
 | ID | Invariant | Enforced by |
 |---|---|---|
-| I1 | `reserved_bytes` = sum of `bytes` of the account's active reservations | Same-transaction updates; decrement only on a real `active → released` transition |
+| I1 | `reserved_bytes` = sum of `bytes` of the account's active reservations | Counters private to the `Account` aggregate, changed only by `Reserve` and `Release`; saved in the same transaction as the reservation; decremented only on a real `active → released` transition |
 | I2 | `active_reservations` = number of the account's active reservations | Same as I1 |
-| I3 | A reservation moves from `active` to `released` at most once, and never back | `UPDATE … WHERE status = 'active'`; a `CHECK` tying `status` to `released_at` |
+| I3 | A reservation moves from `active` to `released` at most once, and never back | `Account.Release` changes nothing on a released reservation; `UPDATE … WHERE status = 'active'` as a second guard; a `CHECK` tying `status` to `released_at` |
 | I4 | At most one reservation per `(account_id, idempotency_key)` | `UNIQUE` constraint |
-| I5 | A reservation is admitted only if, at that moment, `active_reservations < MAX_PARALLEL_CHUNKS` and `bytes ≤ limit − reserved_bytes` | `DecideReserve` inside a `BEGIN IMMEDIATE` transaction |
+| I5 | A reservation is admitted only if, at that moment, `active_reservations < MAX_PARALLEL_CHUNKS` and `bytes ≤ limit − reserved_bytes` | `Account.Reserve`, called inside a `BEGIN IMMEDIATE` transaction |
 | I6 | Counters are never negative; `bytes > 0` | `CHECK` constraints |
 
 I5 constrains admissions, not the stored state: after a limit is lowered, usage may legitimately exceed it ([P7](#p7--a-limit-drops-below-current-usage)). I1 and I2 are checked with SQL after every database test.
@@ -64,7 +64,7 @@ CREATE TABLE settings (
 ) STRICT;
 ```
 
-- **Counters on `accounts`**: admission reads one row, whatever the number of active reservations ([D5](decisions.md#d5--usage-counters-on-the-account-row)).
+- **Counters on `accounts`**: admission reads one row, whatever the number of active reservations ([D5](decisions.md#d5--usage-counters-on-the-account-row)). In Go, they are private fields of the `Account` aggregate ([D20](decisions.md#d20--a-rich-account-aggregate-with-private-counters)).
 - **No `CHECK (reserved_bytes <= storage_limit_bytes)`**: that state is legitimate after a limit is lowered ([D11](decisions.md#d11--lowered-limits-never-revoke-reservations)).
 - **The idempotency key lives on the reservation**: only one operation needs it, and `bytes` serves as the request fingerprint.
 - **Released rows are kept**: they answer replays and `GET`. Their retention is gap [G2](#gaps-that-would-block-a-production-release).
@@ -88,41 +88,44 @@ With `modernc.org/sqlite`, `_pragma` values are applied to every connection the 
 
 ## Reserve transaction
 
-The idempotency lookup runs first. A retry of an accepted request therefore succeeds even if the account has since filled up, all slots are used, or the limit source is down.
+The idempotency lookup comes before every admission rule. A retry of an accepted request therefore succeeds even if the account has since filled up, all slots are used, or the limit source is down.
 
 | Step | Where | Check | Result |
 |---|---|---|---|
 | 0 | service | Same `(account, key)` already in flight | `409 request_in_progress`, no database access |
-| 1 | transaction | A reservation exists for `(account, key)` with the same `bytes` | Replay: `200` with its current state |
-| 2 | transaction | … with different `bytes` | `422 idempotency_key_reused` |
-| 3 | transaction | The account does not exist | `404 account_not_found` |
-| 4 | transaction | `MAX_PARALLEL_CHUNKS` never obtained | `503 limit_unavailable` |
-| 5 | transaction | `active_reservations ≥ MAX_PARALLEL_CHUNKS` | `409 too_many_active_reservations` |
-| 6 | transaction | `bytes > storage_limit_bytes − reserved_bytes` | `409 insufficient_storage` |
-| 7 | transaction | None | Insert, add `bytes` and 1 to the counters, commit: `201` |
+| 1 | repository | The account does not exist | `404 account_not_found` |
+| 2 | `Account.Reserve` | A reservation exists for `(account, key)` with the same `bytes` | Replay: `200` with its current state |
+| 3 | `Account.Reserve` | … with different `bytes` | `422 idempotency_key_reused` |
+| 4 | `Account.Reserve` | `MAX_PARALLEL_CHUNKS` never obtained | `503 limit_unavailable` |
+| 5 | `Account.Reserve` | `active_reservations ≥ MAX_PARALLEL_CHUNKS` | `409 too_many_active_reservations` |
+| 6 | `Account.Reserve` | `bytes > storage_limit_bytes − reserved_bytes` | `409 insufficient_storage` |
+| 7 | `Account.Reserve`, then repository | None | The counters grow; the repository inserts the reservation, saves the counters and commits: `201` |
 
-Steps 1 to 6 are `DecideReserve`, a pure function that the repository runs between `BEGIN IMMEDIATE` and `COMMIT`. Step 6 subtracts instead of adding, so it cannot overflow. It also refuses every request when usage is above a lowered limit, because the difference is then negative.
+Steps 1 to 7 run between `BEGIN IMMEDIATE` and `COMMIT`; steps 2 to 7 are `Account.Reserve`, a pure method.
+- Step 1 comes before the idempotency lookup but never hides a replay: the foreign key guarantees that no reservation exists for an unknown account.
+- Step 6 subtracts instead of adding, so it cannot overflow. It also refuses every request when usage is above a lowered limit, because the difference is then negative.
+- The repository saves the counters as absolute values taken from the aggregate. It is safe because `BEGIN IMMEDIATE` holds the write lock from the load to the commit: no other write can come in between.
 
 ## Release transaction
+
+In one `BEGIN IMMEDIATE` transaction:
+
+1. Load the reservation by `id` and `account_id`. Not found, or owned by another account: `404 reservation_not_found`.
+2. Load the account, and call `account.Release(&reservation, now)`. For an active reservation, it marks it released and gives its `bytes` and its slot back. For a released one, it changes nothing and returns `false`: the call ends with `200` and the unchanged reservation.
+3. When it changed something, save it:
 
 ```sql
 UPDATE reservations
    SET status = 'released', released_at = :now
- WHERE id = :id AND account_id = :account AND status = 'active'
-RETURNING bytes;
+ WHERE id = :id AND account_id = :account AND status = 'active';
+-- must change exactly one row: a second guard behind Account.Release
 
--- One row returned: the reservation was active and is now released.
 UPDATE accounts
-   SET reserved_bytes      = reserved_bytes - :bytes,
-       active_reservations = active_reservations - 1
+   SET reserved_bytes = :reserved_bytes, active_reservations = :active_reservations
  WHERE id = :account;
-
--- No row returned: read the reservation.
---   found     → already released: return it unchanged (200)
---   not found → 404 reservation_not_found
 ```
 
-The counters change only if this statement moved the row from `active` to `released`, so a second release has nothing to give back.
+The space comes back only on a real `active → released` transition, so a second release has nothing to give back.
 
 ## Problems and solutions
 
@@ -160,7 +163,7 @@ The guard is a convenience. The `UNIQUE (account_id, idempotency_key)` constrain
 
 **Solution.** `bytes` is stored with the key. A mismatch returns `422 idempotency_key_reused`, with the original `bytes` in the response.
 
-**Proved by.** `TestDecideReserve`, `TestAPI_KeyReuseWithDifferentBytes`.
+**Proved by.** `TestAccount_Reserve`, `TestAPI_KeyReuseWithDifferentBytes`.
 
 ### P5 — A retry arrives after the situation changed
 
@@ -168,17 +171,17 @@ The guard is a convenience. The `UNIQUE (account_id, idempotency_key)` constrain
 
 **Solution.** The idempotency lookup comes before every other check, so all these retries return the original reservation. A released reservation is returned as released and never created again.
 
-**Proved by.** `TestDecideReserve` (replay cases).
+**Proved by.** `TestAccount_Reserve` (replay cases).
 
 ### P6 — Double release and concurrent releases
 
 **Problem.** Releasing twice, whether from a retry or from two devices, must not give the space back twice.
 
-**Solution.** The conditional `UPDATE … WHERE status = 'active'` moves the row at most once, and the counters are decremented only when it does. Later calls return `200` with the same body.
+**Solution.** `Account.Release` gives the space back only on a real `active → released` transition, and changes nothing on a reservation already released. The `UPDATE … WHERE status = 'active'` that saves it is a second guard. Later calls return `200` with the same body.
 
 An unknown reservation, or one owned by another account, gets `404` rather than `403`, so the service does not reveal that it exists.
 
-**Proved by.** `TestRelease_Twice`, `TestRelease_ConcurrentReleasesCreditOnce`, `TestRelease_OtherAccountIsNotFound`, `TestAPI_ReleaseIdempotent`.
+**Proved by.** `TestAccount_ReleaseTwice`, `TestRelease_Twice`, `TestRelease_ConcurrentReleasesCreditOnce`, `TestRelease_OtherAccountIsNotFound`, `TestAPI_ReleaseIdempotent`.
 
 ### P7 — A limit drops below current usage
 
@@ -186,7 +189,7 @@ An unknown reservation, or one owned by another account, gets `404` rather than 
 
 **Solution.** Nothing is revoked ([D11](decisions.md#d11--lowered-limits-never-revoke-reservations)). New reservations are refused until usage is back under the limit; release, usage and replays keep working. `available_bytes` is reported as `max(0, limit − reserved)`.
 
-**Proved by.** `TestReserve_AfterStorageLimitLowered`, `TestReserve_AfterMaxActiveLowered`, `TestAvailableBytes_NeverNegative`.
+**Proved by.** `TestReserve_AfterStorageLimitLowered`, `TestReserve_AfterMaxActiveLowered`, `TestAccount_AvailableBytesNeverNegative`.
 
 ### P8 — env.hivenet.com is down, slow or returns garbage
 
@@ -250,7 +253,7 @@ On SIGTERM, the server stops accepting connections, finishes in-flight requests 
 | Unknown account or reservation | `404` |
 | `bytes` above the account's entire limit | `409 insufficient_storage` |
 
-**Proved by.** `TestAPI_ReserveValidation`, `TestDecideReserve`.
+**Proved by.** `TestAPI_ReserveValidation`, `TestAccount_Reserve`.
 
 ### P14 — MAX_PARALLEL_CHUNKS becomes very large
 

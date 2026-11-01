@@ -56,7 +56,7 @@ errs := make([]error, n)
 for i := range n {
 	wg.Go(func() {
 		<-start // all goroutines are released together
-		_, _, errs[i] = repo.Reserve(ctx, "acc", fmt.Sprintf("key-%d", i), candidate(i), decide)
+		_, _, errs[i] = repo.Reserve(ctx, candidate(i), maxActive) // candidate(i) uses the key "key-<i>"
 	})
 }
 close(start)

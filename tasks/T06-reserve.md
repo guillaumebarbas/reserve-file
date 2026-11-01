@@ -17,9 +17,9 @@
 
 - [ ] A missing or empty `Idempotency-Key` gives `400 invalid_idempotency_key`.
 - [ ] `bytes` is decoded into `*int64`; missing, `0` or negative gives `400 invalid_request`.
-- [ ] `domain.DecideReserve` applies steps 3 to 6 of the reserve transaction, in order: account missing, limit unknown, slots, space (with a subtraction, so no overflow).
+- [ ] `account.Reserve(candidate, existing, maxActive)` applies steps 4 to 7 of the reserve transaction, in order: limit unknown, slots, space (with a subtraction, so no overflow), then admission, which grows the counters.
 - [ ] The service builds the candidate reservation (UUIDv7, `created_at` from an injected clock) and passes the current limit.
-- [ ] The repository loads the state, decides, inserts and updates the counters in one transaction. A refusal writes nothing.
+- [ ] The repository loads the account (unknown: `ErrAccountNotFound`, step 1) and calls `account.Reserve`, then inserts the reservation and saves the counters, in one transaction. A refusal writes nothing.
 - [ ] `201` with `Location` and the reservation body. Refusals follow the api.md catalogue, with their extension fields.
 - [ ] Invariants I1 and I2 hold after every test.
 
@@ -36,8 +36,8 @@ The user is a client application uploading files. Account `acc_small`: 100 MiB, 
 ## Tests
 
 Unit (`internal/domain`, `internal/service`):
-- [ ] `TestDecideReserve` — admission cases: fits; exactly fills the space; one byte too many; larger than an empty account's limit; all slots used (checked before space); limit unknown; account missing; values near `MaxInt64`; `bytes ≤ 0`.
-- [ ] `TestService_PassesCurrentLimitToDecision` — with a known and with an unknown limit.
+- [ ] `TestAccount_Reserve` — admission cases: fits; exactly fills the space; one byte too many; larger than an empty account's limit; all slots used (checked before space); limit unknown; values near `MaxInt64`; `bytes ≤ 0`.
+- [ ] `TestService_PassesCurrentLimit` — with a known and with an unknown limit.
 - [ ] `TestService_BuildsCandidate` — UUIDv7 ID, `created_at` from the clock, status `active`.
 
 Integration (`internal/repository/sqlite`, `internal/handler`):

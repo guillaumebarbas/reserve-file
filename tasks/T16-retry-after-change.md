@@ -34,7 +34,7 @@ The user is a client application. Account `acc_small`.
 ## Tests
 
 Unit (`internal/domain`):
-- [ ] `TestDecideReserve` — adds replay cases: account full, all slots used, limit unknown, reservation released.
+- [ ] `TestAccount_Reserve` — adds replay cases: account full, all slots used, limit unknown, reservation released.
 
 Integration (`internal/handler`):
 - [ ] `TestAPI_ReplayOfReleasedReservation`

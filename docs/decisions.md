@@ -29,6 +29,7 @@ How they are implemented: [architecture.md](architecture.md) · [consistency.md]
 | D17 | Accounts seeded from configuration; the configured limit is applied at every start | Accepted |
 | D18 | Delivered with Docker Compose; tests and demo run in containers | Accepted |
 | D19 | Unit, integration and container tests; 100% coverage of the internal packages | Accepted |
+| D20 | A rich `Account` aggregate with private counters holds the business rules | Accepted |
 
 ## D1 — Standard library for HTTP, logs and configuration
 
@@ -73,12 +74,13 @@ How they are implemented: [architecture.md](architecture.md) · [consistency.md]
 
 **Status:** Accepted
 
-**Decision.** `domain` (entities, pure rules, errors) ← `service` (use cases, ports) ← adapters (`repository/sqlite`, `limits`, `handler`). For reserve, the repository opens the transaction, loads the state, calls a pure decision function from the domain and persists the outcome: the "update func" pattern described by Three Dots Labs (*Wild Workouts*).
+**Decision.** `domain` (the `Account` aggregate, entities, errors) ← `service` (use cases, ports) ← adapters (`repository/sqlite`, `limits`, `handler`). For reserve and release, the repository opens the transaction, loads the `Account` aggregate, calls its method (`Reserve` or `Release`) and saves the result, before committing (see [D20](#d20--a-rich-account-aggregate-with-private-counters)).
 
-**Why.** The admission rule must run in the same transaction as the write. The update func keeps the rule pure (tested without a database) while the repository owns atomicity. Ports keep SQLite and the external limit source replaceable, one package each.
+**Why.** The admission rule must run in the same transaction as the write. The rule stays in the domain and is tested without a database, while the repository owns atomicity. Ports keep SQLite and the external limit source replaceable, one package each.
 
 **Rejected.**
 - The service reads usage, checks it, then calls insert: two statements, so concurrent requests interleave between them and exceed the limit.
+- The "update func" pattern of Three Dots Labs (*Wild Workouts*), where the service hands the repository a decision callback: with the rules on the aggregate, the callback would only forward the call, so it adds a function-typed parameter for nothing.
 - A transaction manager carrying the transaction in `context.Context` (`@Transactional` style): implicit, and a call made outside it silently writes without a transaction.
 - Generic repositories, mapper packages, interfaces with a single implementation, dependency-injection containers.
 
@@ -93,6 +95,7 @@ How they are implemented: [architecture.md](architecture.md) · [consistency.md]
 **Rejected.** `SUM(bytes)` over active reservations on every request: a single source of truth, but its cost grows with the number of active reservations and is paid while holding the write lock, which slows down every write in the service.
 
 **Guards against drift.**
+- The counters are private to the `Account` aggregate: only its `Reserve` and `Release` methods change them ([D20](#d20--a-rich-account-aggregate-with-private-counters)).
 - Counters are decremented only when the `active → released` transition really happened.
 - `CHECK (… >= 0)` on both counters.
 - After every database test, the counters are compared with `SUM` / `COUNT` of the active rows.
@@ -269,6 +272,29 @@ Domain errors carry facts; the HTTP layer writes the text. `5xx` responses never
 - Mocking the database: it would prove neither locking, nor constraints, nor atomicity.
 
 **Consequence.** Coverage shows which lines ran, not that they are right: assertions and invariant checks carry the proof. A branch that no meaningful test can reach is dead code and is removed.
+
+## D20 — A rich Account aggregate with private counters
+
+**Status:** Accepted
+
+**Decision.** The business rules are methods of the domain types that own the data. `Account` is the aggregate root:
+- `account.Reserve(candidate, existing, maxActive)` answers a reservation request. A retry of a known key is answered first: replay, or `KeyReusedError` if the size differs. Otherwise the candidate is admitted only if a slot and enough space are free, and the counters are updated.
+- `account.Release(reservation, at)` marks an active reservation released and gives its space back. On a reservation already released, it changes nothing.
+- `account.AvailableBytes()` is the space left, never negative.
+
+Its counters are unexported fields, so only these methods change them. The repository rebuilds an account with `domain.RestoreAccount(…)` and reads its counters through the accessors `ReservedBytes()` and `ActiveReservations()`. `Reservation` stays a plain struct.
+
+In memory, the aggregate is the account row and, when needed, the one reservation concerned. It never holds the account's whole list of reservations: the counters summarize them ([D5](#d5--usage-counters-on-the-account-row)).
+
+**Why.**
+- The code reads like the domain: an account reserves and releases.
+- The compiler guarantees that the counters change only through `Reserve` and `Release`: no stray assignment elsewhere can break invariants I1 and I2.
+- The methods are pure, so the rules are tested without a database.
+
+**Rejected.**
+- A free decision function over a passive state (`DecideReserve(state, …)`), the previous design: as testable, but the rules sit apart from the data they protect, and nothing stops other code from changing the counters.
+- Encapsulating every type, `Reservation` included: an accessor for every field, Java-bean style, with no invariant to protect.
+- Loading all the reservations of an account: unbounded memory ([P14](consistency.md#p14--max_parallel_chunks-becomes-very-large)).
 
 ## Patterns considered and not used
 

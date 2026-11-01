@@ -26,7 +26,7 @@ The user is a client application. Account `acc_small`.
 ## Tests
 
 Unit (`internal/domain`):
-- [ ] `TestDecideReserve` — adds: an existing key with different bytes gives `KeyReusedError`.
+- [ ] `TestAccount_Reserve` — adds: an existing key with different bytes gives `KeyReusedError`.
 
 Integration (`internal/repository/sqlite`, `internal/handler`):
 - [ ] `TestReserve_KeyReuseWithDifferentBytes`
