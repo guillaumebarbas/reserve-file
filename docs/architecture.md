@@ -132,7 +132,7 @@ The signatures are indicative and will be settled during implementation. What wi
 
 ### Release
 
-One write transaction: load the reservation (unknown, or owned by another account: `404`) and the account, then `account.Release(&reservation, now)`. It marks the reservation released and gives its space back, or reports that it already was. Only when it changed, the repository writes the reservation and the counters. SQL in [consistency.md](consistency.md#release-transaction).
+One write transaction: load the account (unknown: `404 account_not_found`, as for reserve), then the reservation (unknown, or owned by another account: `404 reservation_not_found`), then `account.Release(&reservation, now)`. It marks the reservation released and gives its space back, or reports that it already was. Only when it changed, the repository writes the reservation and the counters. SQL in [consistency.md](consistency.md#release-transaction).
 
 Release involves neither the in-flight guard nor `LimitProvider`, so it works as long as the database does.
 

@@ -94,7 +94,7 @@ curl -i -X POST http://localhost:8080/accounts/large_account/reservations/01a196
 ```
 
 - **Idempotent:** repeating the call returns `200` and the same body. The space is given back once.
-- **Not found:** `404 reservation_not_found` for an unknown reservation or one owned by another account.
+- **Not found:** `404 reservation_not_found` for an unknown reservation or one owned by another account; `404 account_not_found` for an unknown account, as for reserve and usage.
 - **Independent of `MAX_PARALLEL_CHUNKS`:** release works even when the limit source is down.
 
 ## Usage

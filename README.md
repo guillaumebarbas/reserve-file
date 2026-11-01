@@ -102,14 +102,27 @@ A request that does not fit is refused with its numbers, and nothing is reserved
 
 Retrying with the same key returns `503` until the replay lands with T08.
 
+Read the reservation back with the `id` from the response, then release it; the space comes back at once:
+
+```sh
+curl -s http://localhost:8080/accounts/small_account/reservations/01a1989c-9235-7ec5-a7f2-00e4ce5e968d
+curl -s -X POST http://localhost:8080/accounts/small_account/reservations/01a1989c-9235-7ec5-a7f2-00e4ce5e968d/release
+```
+
+```json
+{"id":"01a1989c-9235-7ec5-a7f2-00e4ce5e968d","account_id":"small_account","bytes":31457280,"status":"released","created_at":"2026-11-01T19:36:00.309Z","released_at":"2026-11-01T19:36:04.649Z"}
+```
+
+A second release of the same reservation never gives the space back twice; until T10, it answers `500` instead of the same body.
+
 Every response carries an `X-Request-Id`; `docker compose logs api` shows one line per request with the same ID. Errors are `application/problem+json` with a stable `code`.
 
 | Method | Path | Purpose | Available |
 |---|---|---|---|
 | `GET` | `/accounts/{accountID}/usage` | Limit, reserved space and available space | Yes |
 | `POST` | `/accounts/{accountID}/reservations` | Reserve space, with an `Idempotency-Key` | Yes; retries with T08 |
-| `GET` | `/accounts/{accountID}/reservations/{reservationID}` | Read a reservation | With T09 |
-| `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation | With T09 |
+| `GET` | `/accounts/{accountID}/reservations/{reservationID}` | Read a reservation | Yes |
+| `POST` | `/accounts/{accountID}/reservations/{reservationID}/release` | Release a reservation | Yes; a second release with T10 |
 | `GET` | `/healthz` | Liveness | Yes |
 | `GET` | `/readyz` | Readiness: the database answers; `limits` tells whether `MAX_PARALLEL_CHUNKS` is known | Yes |
 
@@ -139,9 +152,9 @@ The reasons, the invariants and the failure handling are in [docs/decisions.md](
 
 Each step is a ticket in [tasks/](tasks/README.md) and an issue on the [project board](https://github.com/users/guillaumebarbas/projects/2).
 
-- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots, one request at a time (T06).
+- **Done:** service skeleton, Docker image and test pipeline (T01); database, schema and seeded accounts (T02); HTTP foundation: request IDs, access logs, panic recovery, error format, readiness (T03); `MAX_PARALLEL_CHUNKS` fetched at startup, cached, saved and refreshed every minute (T04); account usage, through every layer (T05); reserving space within the storage limit and the slots, one request at a time (T06); reading and releasing a reservation (T09).
 - **In progress:** this README and the demo (T12).
-- **Not started:** concurrency, retries, release and restart (T07 to T11), the other edge cases (T13 to T21), container tests (T22), OpenAPI (T23).
+- **Not started:** concurrency, retries, double release and restart (T07, T08, T10, T11), the other edge cases (T13 to T21), container tests (T22), OpenAPI (T23).
 
 Time spent so far: T01 35 min, T02 30 min, T03 30 min, then T04 and T05 in parallel in about 20 min, after the design and tooling work (docs, tickets, rules, GitHub setup).
 
